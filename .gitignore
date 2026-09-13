@@ -1,0 +1,4 @@
+data/raw/
+node_modules/
+pipeline/chrome-profile/
+*.png
