@@ -1,0 +1,418 @@
+{
+ "name": "Warder's Lifeline (Healer)",
+ "description": "Justicar Warder + Linkstrider healer, zero weapon investment, Multifaceted. Pre-shrine (Power 15): Cha 90 / Fort 90 / Agi 40 / Will 30 (+1 Flame, Thunder, Frost). Post: Fort 80 (Reinforced Armor, Brace), Cha 65, Thunder 50 (Kickstart, Spark Swap, Lightning Cloak), Flame 50 + Will 40 (Undying Flame), Frost 20 (Glacial Arc), Agi 25.",
+ "notes": "Multifaceted ON. Any starter sword. Pre-shrine order: Charisma 90 (Command: Live, Propagandist, Cornered Fool, Cult of Personality, Off Your Game), Fortitude 90 with Will 30 (Battle Tendency, Braced Collapse, Moving Fortress, Perseverance -> Reinforced Armor; Reinforce -> Grand Support), Agi 40 (Ghost). Put 1 point in Flame/Thunder/Frost before shrining. Shrine at Power 15. Post-shrine order: Flame 50 + Will 40 (Undying Flame), Thunder 50 (Kickstart, Spark Swap, Lightning Cloak), Frost 20 (Glacial Arc), Fort 80, Agi 25. Outfit: Familiar Knight's Armor for Hyperbody (35% DR + speed + regen aura for allies, 2 min CD); Warder's Attire (free with Warder path, Justicar's Gift) until you get it. Equipment: Deepscorn Casque (Already Dead: less damage from health-cost abilities = Symbiotic Sustain), Bastions/Wartreads of Enmity (Heart of Enmity drops; Ignition Gauntlets + Imperial Boots until then), Regenerative Pendant + Regenerative Earrings (temp HP on knock, +10% healing received with temp HP), Citadel Frames, Prophet's/Akira's/Waning/Moon rings. Pips: Health on armor, Ether on face/earrings.",
+ "origin": "Justicar",
+ "oath": "Linkstrider",
+ "race": "Capra",
+ "murmur": "Rhythm",
+ "bell": "Sacred Field",
+ "outfit": "Familiar Knight's Armor",
+ "weapon": "",
+ "enchant": "",
+ "boons": [
+  "Steadfast",
+  "Survivalist"
+ ],
+ "flaws": [
+  "Obvious",
+  "None",
+  "None"
+ ],
+ "traits": {
+  "Vitality": 6,
+  "Erudition": 6,
+  "Proficiency": 0,
+  "Songchant": 0
+ },
+ "preShrine": {
+  "Charisma": 90,
+  "Fortitude": 90,
+  "Agility": 40,
+  "Willpower": 30,
+  "Flamecharm": 1,
+  "Thundercall": 1,
+  "Frostdraw": 1
+ },
+ "shrineOfOrder": true,
+ "postShrine": {
+  "Charisma": 65,
+  "Fortitude": 80,
+  "Agility": 25,
+  "Willpower": 40,
+  "Intelligence": 0,
+  "Strength": 0,
+  "Flamecharm": 50,
+  "Thundercall": 50,
+  "Frostdraw": 20,
+  "Light Wep.": 0
+ },
+ "mantras": [
+  "Graceful Flame",
+  "Symbiotic Sustain",
+  "Parasitic Leech",
+  "Reinforce",
+  "Alsin's Aid",
+  "Spark Swap",
+  "Glacial Arc",
+  "Sing",
+  "Flame Wisp",
+  "Lightning Cloak",
+  "Taunt"
+ ],
+ "talents": [
+  "Oath: Linkstrider",
+  "Entropy Link",
+  "Symbiotic Link",
+  "Justicar's Mark",
+  "Justicar's Blessing",
+  "Emergency Mark",
+  "Righteous Violence",
+  "Kindness",
+  "Mark Mastery",
+  "Justicar's Call",
+  "Swiftfoot",
+  "Trained Legs",
+  "Jus Karita",
+  "Justicar's Renewal",
+  "Swiftkick Prodigy",
+  "Grand Support",
+  "Undying Flame",
+  "Denial Repulse",
+  "Cauterized Wounds",
+  "Flame Within",
+  "Hungry Flames",
+  "Flamecharmer",
+  "Adept Flamecharmer",
+  "Expert Flamecharmer",
+  "Master Flamecharmer",
+  "Vow of Mastery",
+  "Command: Live",
+  "Command: Summon",
+  "Propagandist",
+  "Unnecessary Theatrics",
+  "Cornered Fool",
+  "Cult of Personality",
+  "Charismatic Cast",
+  "Lasting Charisma",
+  "Tough Love",
+  "Chaotic Charm",
+  "Manipulator",
+  "Golden Tongue",
+  "Give and Take",
+  "Callout",
+  "Spotter",
+  "Encore",
+  "To The Finish",
+  "Exoskeleton",
+  "Scaredy Cat",
+  "Conditioned Runner",
+  "Endurance Runner",
+  "Ghost",
+  "Evasive Expert",
+  "Swift Rebound",
+  "Risky Moves",
+  "Kick Off",
+  "Braced Collapse",
+  "Moving Fortress",
+  "Last Resort",
+  "Martyr",
+  "Polite Awakening",
+  "Replenishing Knockout",
+  "Bloodiron Spirit",
+  "Murmur: Rhythm",
+  "Kickstart",
+  "Thundercaller",
+  "Adept Thundercaller",
+  "Expert Thundercaller",
+  "Off Your Game",
+  "Justicar's Preference",
+  "Justicar's Adaptation",
+  "Frostdrawer",
+  "Adept Frostdrawer",
+  "Defensive Reprisal",
+  "Dancing Guard",
+  "Battle Tendency",
+  "Perseverance",
+  "Reinforced Armor",
+  "Fortitude Unbounded",
+  "Hyperbody"
+ ],
+ "multifaceted": true,
+ "equipment": {
+  "Head": {
+   "name": "Deepscorn Casque",
+   "qualityStars": 3,
+   "pips": [
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Legendary",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Legendary",
+     "stat": "Physical Armor"
+    }
+   ],
+   "enchant": ""
+  },
+  "Arms": {
+   "name": "Bastions of Enmity",
+   "qualityStars": 3,
+   "pips": [
+    {
+     "rarity": "Legendary",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Legendary",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Legendary",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Legendary",
+     "stat": "Physical Armor"
+    }
+   ],
+   "enchant": ""
+  },
+  "Legs": {
+   "name": "Wartreads of Enmity",
+   "qualityStars": 3,
+   "pips": [
+    {
+     "rarity": "Legendary",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Legendary",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Legendary",
+     "stat": "Anchor"
+    }
+   ],
+   "enchant": ""
+  },
+  "Torso": {
+   "name": "Regenerative Pendant",
+   "qualityStars": 2,
+   "pips": [
+    {
+     "rarity": "Legendary",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Health"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Ether"
+    }
+   ],
+   "enchant": ""
+  },
+  "Face": {
+   "name": "Citadel Frames",
+   "qualityStars": 2,
+   "pips": [
+    {
+     "rarity": "Rare",
+     "stat": "Ether"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Ether"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Sanity"
+    }
+   ],
+   "enchant": ""
+  },
+  "Earrings": {
+   "name": "Regenerative Earrings",
+   "qualityStars": 2,
+   "pips": [
+    {
+     "rarity": "Rare",
+     "stat": "Ether"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Ether"
+    },
+    {
+     "rarity": "Rare",
+     "stat": "Sanity"
+    }
+   ],
+   "enchant": ""
+  },
+  "Rings": [
+   {
+    "name": "Prophet's Ring",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Legendary",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Posture"
+     }
+    ],
+    "enchant": ""
+   },
+   {
+    "name": "Akira's Ring",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Legendary",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Posture"
+     }
+    ],
+    "enchant": ""
+   },
+   {
+    "name": "Waning Ring",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     }
+    ],
+    "enchant": ""
+   },
+   {
+    "name": "Moon Ring",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     }
+    ],
+    "enchant": ""
+   }
+  ]
+ },
+ "mantraModifications": {
+  "Graceful Flame": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Flame Wisp": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Reinforce": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Lightning Cloak": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Taunt": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Sing": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Symbiotic Sustain": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Alsin's Aid": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Spark Swap": {
+   "gem": "Blessed",
+   "spark": "None"
+  },
+  "Glacial Arc": {
+   "gem": "Blue",
+   "spark": "None"
+  },
+  "Parasitic Leech": {
+   "gem": "Bloodless",
+   "spark": "None"
+  }
+ }
+}

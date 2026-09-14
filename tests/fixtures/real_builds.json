@@ -1,0 +1,1423 @@
+{
+ "PB7C3oJn": {
+  "id": "PB7C3oJn",
+  "version": 3,
+  "createdAt": "2026-06-29T00:40:44.263Z",
+  "updatedAt": "2026-09-09T19:01:52.082Z",
+  "author": {
+   "id": "skippergripper",
+   "verifiedId": "896731887987482634",
+   "name": "skippergripper"
+  },
+  "stats": {
+   "buildName": "Tidekeeper V2",
+   "traits": {
+    "Songchant": 6,
+    "Proficiency": 0,
+    "Vitality": 6,
+    "Erudition": 0
+   },
+   "traitsPoints": 0,
+   "buildDescription": "Thank you to @yoriichi_2005 (my bestest friend) for help!!",
+   "points": 0,
+   "pointSpent": 330,
+   "meta": {
+    "Origin": "Lone Warrior",
+    "Oath": "Dawnwalker",
+    "Outfit": "Flame Worshipper Armor",
+    "Race": "None",
+    "Murmur": "Ardour",
+    "Bell": "Sacred Field"
+   },
+   "buildAuthor": "",
+   "flaw1": "Blind",
+   "flaw2": "Haemophilia",
+   "flaw3": "None",
+   "pointsUntilNextPower": 0,
+   "power": 20,
+   "boon1": "Autodidact",
+   "boon2": "Packmule"
+  },
+  "attributes": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 30,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 40,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 0,
+    "Flamecharm": 81,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 0,
+    "Intelligence": 25,
+    "Agility": 0,
+    "Willpower": 75,
+    "Strength": 5,
+    "Fortitude": 75
+   }
+  },
+  "content": {
+   "mantraModifications": {
+    "Warden Blades": {
+     "gem": "Blue"
+    },
+    "Relentless Flames": {
+     "gem": "Blessed"
+    },
+    "Burning Servants": {
+     "gem": "Bloodless"
+    },
+    "Flame Sentinel": {
+     "gem": "Blue"
+    },
+    "Flame Assault": {
+     "gem": "Blue"
+    },
+    "Reinforce": {
+     "gem": "Blue"
+    },
+    "Prediction": {
+     "gem": "Blue"
+    },
+    "Frozen Servants": {
+     "gem": "Blue",
+     "spark": "Blast"
+    },
+    "Flame Wisp": {
+     "gem": "Blue"
+    },
+    "Radiant Dawn": {
+     "gem": "Insignia"
+    },
+    "Dread Breath": {
+     "gem": "Blue"
+    }
+   },
+   "notes": "Stat order:\nPre shrine: 50 int, 30 will, 50 fort, 100 will, 100 fort. \nNote: either put in 4 points into med pre for brickwall or js use shrine of chance/ talent quest.\nPost shrine: 5 str, 40 flame, 30 frost, 80 flame and 30 med.\nNote: off-hand worshippers shield."
+  },
+  "meta": {
+   "votes": {
+    "up": 24,
+    "down": 0,
+    "voters": {
+     "906644694468001872": "up",
+     "647948629625143323": "up",
+     "733044398102937630": "up",
+     "653233355000643605": "up",
+     "829458530737192991": "up",
+     "870504734920945694": "up",
+     "731902463954649119": "up",
+     "1435459315287851089": "up",
+     "764178935336403005": "up",
+     "753043665995300966": "up",
+     "1230625286983516230": "up",
+     "962402301178425395": "up",
+     "867008849219420201": "up",
+     "863533804350210048": "up",
+     "1242876594905808957": "up",
+     "620303971805954078": "up",
+     "972808740132761640": "up",
+     "808813590617260074": "up",
+     "1264338950370230365": "up",
+     "788778386716622849": "up",
+     "710516412073902171": "up",
+     "1241784476548206687": "up",
+     "1042000516890243124": "up",
+     "790963685652430899": "up"
+    }
+   },
+   "views": 89398,
+   "tags": [
+    "Blindseer",
+    "Meta",
+    "PvE: Mob",
+    "Flamecharm",
+    "Frostdraw"
+   ],
+   "saved": 59,
+   "visibility": "public",
+   "private": false,
+   "comments": {
+    "count": 4,
+    "lastActivity": "2026-09-04T10:58:59.401Z"
+   }
+  },
+  "talents": [
+   "Azure Flames",
+   "Reinforced Armor",
+   "Battle Tendency",
+   "Braced Collapse",
+   "Moving Fortress",
+   "Perseverance",
+   "Brick Wall",
+   "Agitating Spark",
+   "Immolation",
+   "Perfect Flash",
+   "Overflowing Dam",
+   "Carnivore",
+   "Defiance",
+   "Grand Support",
+   "Eureka",
+   "To the Finish",
+   "Exoskeleton",
+   "Neuroplasticity",
+   "Sin Stacker",
+   "All the Dead Gods",
+   "Mythic Stability",
+   "Piercing Will",
+   "Impervious Slumber",
+   "Bloodiron Spirit",
+   "Mirage Clone",
+   "Chronostasis",
+   "Against All Odds",
+   "Emergency Reserves",
+   "Flame Within",
+   "Grand Feast",
+   "Master Craftsman",
+   "Flamecharm Unbounded",
+   "Master Flamecharmer",
+   "Expert Flamecharmer",
+   "Adept Flamecharmer",
+   "Flamecharmer",
+   "Fortitude Unbounded",
+   "Willpower Unbounded",
+   "Underdog",
+   "Chilling Flourish",
+   "Cold Front",
+   "The Eleventh Hour",
+   "Last Resort",
+   "Old Habits Die Hard",
+   "Breathing Exercise",
+   "Conquer your Fears",
+   "Replenishing Knockout",
+   "Armor Conserver",
+   "Successive Prediction",
+   "Steel Scales",
+   "Padded Armor",
+   "Pocket Bombs",
+   "Family Recipe",
+   "Turtle Shell",
+   "Knight's Rally",
+   "Grasp on Reality",
+   "Unfazed",
+   "Magical Resolve",
+   "Flaming Flourish",
+   "Termite",
+   "Water off a Duck's Back",
+   "Flashboil",
+   "Will o' Wisp",
+   "Full Reset",
+   "Oath: Dawnwalker",
+   "Gourmand",
+   "Cryonis",
+   "To The Finish",
+   "Mark of the Lone Warrior"
+  ],
+  "weapons": "Worshipper Longsword",
+  "enchant": "Solar",
+  "motif": "",
+  "thumbnail": "",
+  "weaponStars": {
+   "count": 3,
+   "mod": "DMG%"
+  },
+  "preShrine": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 4,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 1,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 0,
+    "Flamecharm": 1,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 0,
+    "Intelligence": 50,
+    "Agility": 0,
+    "Willpower": 100,
+    "Strength": 0,
+    "Fortitude": 100
+   }
+  },
+  "favoritedTalents": [],
+  "mantras": [
+   "Relentless Flames",
+   "Warden Blades",
+   "Burning Servants",
+   "Frozen Servants",
+   "Prediction",
+   "Reinforce",
+   "Flame Assault",
+   "Flame Sentinel",
+   "Flame Wisp",
+   "Radiant Dawn",
+   "Dread Breath"
+  ],
+  "postShrine": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 30,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 40,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 0,
+    "Flamecharm": 81,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 0,
+    "Intelligence": 25,
+    "Agility": 0,
+    "Willpower": 75,
+    "Strength": 5,
+    "Fortitude": 75
+   }
+  },
+  "preMastery": {},
+  "postMastery": {},
+  "equipment": {
+   "Head": {
+    "name": "Silver Knight's Helm",
+    "qualityStars": 3,
+    "pips": [
+     {
+      "rarity": "Uncommon",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Physical Armor"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Physical Armor"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Physical Armor"
+     },
+     {
+      "rarity": "Legendary",
+      "stat": "Physical Armor"
+     }
+    ],
+    "enchant": ""
+   },
+   "Arms": {
+    "name": "Pathfinder Elite",
+    "qualityStars": 3,
+    "pips": [
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Physical Armor"
+     },
+     {
+      "rarity": "Legendary",
+      "stat": "Physical Armor"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Physical Armor"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Physical Armor"
+     },
+     {
+      "rarity": "Legendary",
+      "stat": "Physical Armor"
+     }
+    ],
+    "enchant": ""
+   },
+   "Legs": {
+    "name": "Wartreads of Enmity",
+    "qualityStars": 3,
+    "pips": [
+     {
+      "rarity": "Legendary",
+      "stat": "Anchor"
+     },
+     {
+      "rarity": "Legendary",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Legendary",
+      "stat": "Health"
+     }
+    ],
+    "enchant": ""
+   },
+   "Torso": {
+    "name": "Imperator's Fury",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     }
+    ],
+    "enchant": ""
+   },
+   "Face": {
+    "name": "Browline Citadel Frames",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Sanity"
+     }
+    ],
+    "enchant": ""
+   },
+   "Earrings": {
+    "name": "Crystal Pendant Earrings",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Sanity"
+     }
+    ],
+    "enchant": ""
+   },
+   "Rings": [
+    {
+     "name": "Diver's Ring",
+     "qualityStars": 2,
+     "pips": [
+      {
+       "rarity": "Uncommon",
+       "stat": "Ether"
+      },
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      },
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      }
+     ],
+     "enchant": ""
+    },
+    {
+     "name": "Bloodiron Ring",
+     "qualityStars": 2,
+     "pips": [
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      },
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      }
+     ],
+     "enchant": ""
+    },
+    {
+     "name": "Isshin's Ring",
+     "qualityStars": 2,
+     "pips": [
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      },
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      }
+     ],
+     "enchant": ""
+    },
+    {
+     "name": "Ring of Casters",
+     "qualityStars": 2,
+     "pips": [
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      },
+      {
+       "rarity": "Rare",
+       "stat": "Health"
+      }
+     ],
+     "enchant": ""
+    }
+   ]
+  },
+  "multifaceted": false
+ },
+ "OQMQnXmo": {
+  "id": "OQMQnXmo",
+  "version": 3,
+  "createdAt": "2026-05-06T22:34:32.600Z",
+  "updatedAt": "2026-09-04T14:00:40.598Z",
+  "author": {
+   "id": "infektedskrpion",
+   "verifiedId": "304316075259199488",
+   "name": "infektedskrpion"
+  },
+  "stats": {
+   "buildName": "The Sanguine Caretaker",
+   "traits": {
+    "Vitality": 6,
+    "Proficiency": 0,
+    "Erudition": 6,
+    "Songchant": 0
+   },
+   "traitsPoints": 0,
+   "buildDescription": "Me like build. You like build?",
+   "points": 1,
+   "pointSpent": 329,
+   "meta": {
+    "Origin": "Justicar",
+    "Oath": "Saltchemist",
+    "Outfit": "None",
+    "Race": "None",
+    "Murmur": "Rhythm",
+    "Bell": "Sacred Field"
+   },
+   "buildAuthor": "",
+   "flaw1": "Simple",
+   "flaw2": "None",
+   "flaw3": "None",
+   "pointsUntilNextPower": 0,
+   "power": 20,
+   "boon1": "Survivalist",
+   "boon2": "Gourmet"
+  },
+  "attributes": {
+   "weapon": {
+    "Light Wep.": 50,
+    "Medium Wep.": 0,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 0,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 0,
+    "Flamecharm": 25,
+    "Bloodrend": 80
+   },
+   "base": {
+    "Charisma": 0,
+    "Intelligence": 100,
+    "Agility": 25,
+    "Willpower": 25,
+    "Strength": 0,
+    "Fortitude": 25
+   }
+  },
+  "content": {
+   "mantraModifications": {
+    "Soulflare Siphon": {},
+    "Crimson Rain": {},
+    "Bloodedge": {},
+    "Flame Assault": {},
+    "Blood Wisp": {},
+    "Flame Leap": {},
+    "Summon Cauldron": {},
+    "Graceful Flame": {},
+    "Exhaustion Strike": {},
+    "Reinforce": {}
+   },
+   "notes": "Pick whatever you'd like for your wildcard mantras.\n\nStat Order (pre shrine):\nFlamecharm\nWillpower\nAgility\nFortitude\nPost Shrine:\nIntelligence\nBlood\nLight Weapons\n\nYou have 8 extra talents you can grab of your choosing from the available list."
+  },
+  "meta": {
+   "votes": {
+    "up": 12,
+    "down": 0,
+    "voters": {
+     "1086371371229118474": "up",
+     "723976754766544927": "up",
+     "1439917229855608956": "up",
+     "878313104113541172": "up",
+     "847907288697798676": "up",
+     "906644694468001872": "up",
+     "1014417266827341835": "up",
+     "551206672857563136": "up",
+     "832961200094445568": "up",
+     "1014743948356493389": "up",
+     "456267845400264717": "up",
+     "1257396467208028270": "up"
+    }
+   },
+   "views": 9082,
+   "tags": [
+    "Advanced",
+    "Saltchemist",
+    "Fun",
+    "PvE: Boss"
+   ],
+   "saved": 18,
+   "visibility": "public",
+   "private": false,
+   "comments": {
+    "count": 1,
+    "lastActivity": "2026-06-01T21:21:18.557Z"
+   }
+  },
+  "talents": [
+   "Oath: Saltchemist",
+   "Neural Overload",
+   "Conditioned Runner",
+   "Endurance Runner",
+   "Scaredy Cat",
+   "Ghost",
+   "Swift Rebound",
+   "Evasive Expert",
+   "Risky Moves",
+   "Will o' Wisp",
+   "Absolute Pitch",
+   "Ether Overdrive",
+   "Perfect Flash",
+   "Overflowing Dam",
+   "Placebo Effect",
+   "Potion Quaffer",
+   "Grand Support",
+   "Eureka",
+   "Fishman",
+   "Exoskeleton",
+   "Neuroplasticity",
+   "Impervious Slumber",
+   "Lightspeed Reflexes",
+   "Sow and Mend",
+   "Master Bloodrender",
+   "Expert Bloodrender",
+   "Adept Bloodrender",
+   "Bloodrender",
+   "Bloodiron Spirit",
+   "Panacea",
+   "Undying Flame",
+   "Denial Repulse",
+   "Chronostasis",
+   "Speed Demon",
+   "Kick Off",
+   "Apothecary",
+   "Chain Reaction",
+   "Chemist's Bag",
+   "Wild Alchemy",
+   "Approaching Singularity",
+   "Master Craftsman",
+   "Perseverance",
+   "Bloodrend Unbounded",
+   "Underdog",
+   "Ether Absorption",
+   "Cauterized Wounds",
+   "Expert Flamecharmer",
+   "Adept Flamecharmer",
+   "Flamecharmer",
+   "Critical Engine",
+   "Old Habits Die Hard",
+   "Breathing Exercise",
+   "Conquer your Fears",
+   "Disbelief",
+   "Armor Conserver",
+   "Intelligence Unbounded",
+   "Cyclical Exsanguination",
+   "Hypovolemic Focus",
+   "Blade Dancer",
+   "Trained Legs",
+   "Swiftfoot",
+   "Justicar's Mark",
+   "Justicar's Blessing",
+   "Perpetual Distillery",
+   "Biotic Salts",
+   "Aromatic Salts",
+   "Antithetic Salts",
+   "Murmur: Rhythm",
+   "Thresher Claws"
+  ],
+  "weapons": "Sanguine Transfuser",
+  "enchant": "",
+  "motif": "",
+  "thumbnail": "",
+  "weaponStars": {
+   "count": 0,
+   "mod": ""
+  },
+  "preShrine": {
+   "weapon": {
+    "Light Wep.": 1,
+    "Medium Wep.": 0,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 0,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 0,
+    "Flamecharm": 40,
+    "Bloodrend": 1
+   },
+   "base": {
+    "Charisma": 0,
+    "Intelligence": 1,
+    "Agility": 40,
+    "Willpower": 40,
+    "Strength": 0,
+    "Fortitude": 50
+   }
+  },
+  "favoritedTalents": [],
+  "mantras": [
+   "Exhaustion Strike",
+   "Graceful Flame",
+   "Blood Wisp",
+   "Flame Leap",
+   "Bloodedge",
+   "Soulflare Siphon",
+   "Crimson Rain",
+   "Flame Assault",
+   "Reinforce"
+  ],
+  "postShrine": {
+   "weapon": {
+    "Light Wep.": 50,
+    "Medium Wep.": 0,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 0,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 0,
+    "Flamecharm": 25,
+    "Bloodrend": 80
+   },
+   "base": {
+    "Charisma": 0,
+    "Intelligence": 100,
+    "Agility": 25,
+    "Willpower": 25,
+    "Strength": 0,
+    "Fortitude": 25
+   }
+  },
+  "preMastery": {},
+  "postMastery": {},
+  "equipment": {
+   "Head": {
+    "name": "Deepscorn Casque",
+    "qualityStars": 3,
+    "pips": [
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Legendary",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Legendary",
+      "stat": "Physical Armor"
+     }
+    ],
+    "enchant": ""
+   },
+   "Arms": null,
+   "Legs": null,
+   "Torso": {
+    "name": "Warmaster's Medallion",
+    "qualityStars": 2,
+    "pips": [
+     {
+      "rarity": "Legendary",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Health"
+     },
+     {
+      "rarity": "Rare",
+      "stat": "Ether"
+     }
+    ],
+    "enchant": ""
+   },
+   "Face": null,
+   "Earrings": null,
+   "Rings": [
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  "multifaceted": false
+ },
+ "4S7J6sgE": {
+  "id": "4S7J6sgE",
+  "version": 3,
+  "createdAt": "2026-07-13T21:24:14.539Z",
+  "updatedAt": "2026-08-04T18:53:12.979Z",
+  "author": {
+   "id": "kxt11x",
+   "verifiedId": "1210232199488475216",
+   "name": "kxt11x"
+  },
+  "stats": {
+   "buildName": "Full-Support Range PvX",
+   "traits": {
+    "Vitality": 6,
+    "Erudition": 4,
+    "Proficiency": 0,
+    "Songchant": 2
+   },
+   "traitsPoints": 0,
+   "buildDescription": "Support-Assassination build without Vow of Mastery & \"Min/max\" (Something like transfuser)\n\nMurmur & Bell is preference  (could drop gale by 10 for other talents)",
+   "points": 1,
+   "pointSpent": 329,
+   "meta": {
+    "Origin": "Justicar",
+    "Oath": "Linkstrider",
+    "Outfit": "Warder's Attire",
+    "Race": "Gremor",
+    "Murmur": "Rhythm",
+    "Bell": "Sacred Field"
+   },
+   "buildAuthor": "",
+   "flaw1": "Obvious",
+   "flaw2": "Squeamish",
+   "flaw3": "None",
+   "pointsUntilNextPower": 0,
+   "power": 20,
+   "boon1": "Steadfast",
+   "boon2": "Survivalist"
+  },
+  "attributes": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 65,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 0,
+    "Shadowcast": 0,
+    "Galebreathe": 60,
+    "Ironsing": 0,
+    "Flamecharm": 40,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 10,
+    "Intelligence": 0,
+    "Agility": 65,
+    "Willpower": 40,
+    "Strength": 25,
+    "Fortitude": 25
+   }
+  },
+  "content": {
+   "mantraModifications": {
+    "Agile Dash": {
+     "gem": "Blue"
+    },
+    "Alsin's Aid": {
+     "gem": "Blue",
+     "spark": "None"
+    },
+    "Symbiotic Sustain": {
+     "gem": "Blue",
+     "spark": "None"
+    },
+    "Parasitic Leech": {
+     "gem": "Bloodless",
+     "spark": "None"
+    },
+    "Wind Gun": {
+     "gem": "Insignia",
+     "spark": "None"
+    },
+    "Graceful Flame": {
+     "gem": "Blue",
+     "spark": "None"
+    },
+    "Wind Forge": {
+     "gem": "Blessed",
+     "spark": "None"
+    },
+    "Flashdraw Strike": {
+     "gem": "Blessed",
+     "spark": "None"
+    },
+    "Gale Lunge": {
+     "gem": "Blue",
+     "spark": "None"
+    },
+    "Flame Leap": {
+     "gem": "Blue",
+     "spark": "None"
+    },
+    "Gale Wisp": {
+     "gem": "Blue",
+     "spark": "None"
+    },
+    "Slice 'n' Dice": {
+     "gem": "Blue"
+    },
+    "Galetrap": {
+     "gem": "Blessed"
+    }
+   },
+   "notes": "updated: 8/4\nwep: -> bellmarrow (Medium 80 -> 65)\n+undying flame\nchanged mantras"
+  },
+  "meta": {
+   "votes": {
+    "up": 1,
+    "down": 0,
+    "voters": {
+     "971412004218757191": "up"
+    }
+   },
+   "views": 14516,
+   "tags": [
+    "Advanced",
+    "Linkstrider",
+    "Galebreathe",
+    "Flamecharm"
+   ],
+   "saved": 3,
+   "visibility": "public",
+   "private": false,
+   "comments": {
+    "count": 0,
+    "lastActivity": null
+   }
+  },
+  "talents": [
+   "Justicar's Technique",
+   "Underdog",
+   "Swiftfoot",
+   "Jus Karita",
+   "Entropy Link",
+   "Carnivore",
+   "Will o' Wisp",
+   "Union Hook",
+   "Bear Trap",
+   "Tap Dancer",
+   "Going Nowhere",
+   "Spine Cutter",
+   "Unseen Threat",
+   "Master Galebreather",
+   "Flamecharmer",
+   "Martyr",
+   "Ethiron's Gaze",
+   "Steady Nerves",
+   "Blade Dancer",
+   "Cut to the Chase",
+   "Oath: Linkstrider",
+   "Lowstride",
+   "Justicar's Call",
+   "Down Comes the Claw",
+   "Air Pressure",
+   "Featherfall",
+   "Swift Rebound",
+   "Disbelief",
+   "Navae's Guidance",
+   "Precise Swing",
+   "Adept Galebreather",
+   "Cheap Shot",
+   "Evasive Expert",
+   "Matador",
+   "Wind Step",
+   "Grand Feast",
+   "Wyvern's Claw",
+   "Battle Tendency",
+   "After Cut",
+   "Last Resort",
+   "Kick Off",
+   "Strong Stern",
+   "Agility Unbounded",
+   "Bloodiron Spirit",
+   "Thresher Claws",
+   "Expert Galebreather",
+   "Scaredy Cat",
+   "Galebreather",
+   "Expert Flamecharmer",
+   "Callout",
+   "Ghost",
+   "Lights Out",
+   "Steady Footing",
+   "Symbiotic Link",
+   "Stay of Execution",
+   "Heavy Haul",
+   "Justicar's Blessing",
+   "Dustlunge",
+   "Chain of Perfection",
+   "Justicar's Mark",
+   "Risky Moves",
+   "Endurance Runner",
+   "Conditioned Runner",
+   "Gale Trap",
+   "Charismatic Cast",
+   "Adept Flamecharmer",
+   "Tough Love",
+   "Aerogliding",
+   "Deep Wound",
+   "Inhale",
+   "Charged Return",
+   "Spinning Swordsman",
+   "Neuroplasticity",
+   "Justicar's Gift",
+   "Murmur: Rhythm",
+   "Undying Flame",
+   "Stifled Jump",
+   "Suffocating Impact"
+  ],
+  "weapons": "Bellmarrow Reave",
+  "enchant": "",
+  "motif": "",
+  "thumbnail": "",
+  "weaponStars": {
+   "count": 3,
+   "mod": "PEN%"
+  },
+  "preShrine": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 2,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 0,
+    "Shadowcast": 0,
+    "Galebreathe": 5,
+    "Ironsing": 0,
+    "Flamecharm": 6,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 25,
+    "Intelligence": 0,
+    "Agility": 90,
+    "Willpower": 1,
+    "Strength": 3,
+    "Fortitude": 4
+   }
+  },
+  "favoritedTalents": [],
+  "mantras": [
+   "Parasitic Leech",
+   "Wind Gun",
+   "Graceful Flame",
+   "Wind Forge",
+   "Symbiotic Sustain",
+   "Gale Wisp",
+   "Flame Leap",
+   "Alsin's Aid",
+   "Agile Dash",
+   "Slice 'n' Dice",
+   "Galetrap"
+  ],
+  "postShrine": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 80,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 0,
+    "Shadowcast": 0,
+    "Galebreathe": 60,
+    "Ironsing": 0,
+    "Flamecharm": 30,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 10,
+    "Intelligence": 0,
+    "Agility": 65,
+    "Willpower": 36,
+    "Strength": 25,
+    "Fortitude": 25
+   }
+  },
+  "preMastery": {},
+  "postMastery": {},
+  "equipment": {
+   "Head": null,
+   "Arms": null,
+   "Legs": null,
+   "Torso": null,
+   "Face": null,
+   "Earrings": null,
+   "Rings": [
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  "multifaceted": false
+ },
+ "HG4L474U": {
+  "id": "HG4L474U",
+  "version": 3,
+  "createdAt": "2026-06-28T23:29:55.034Z",
+  "updatedAt": "2026-08-30T22:22:08.072Z",
+  "author": {
+   "id": null,
+   "verifiedId": null,
+   "name": "Anonymous"
+  },
+  "stats": {
+   "buildName": "YOUR Gaurdian Angel",
+   "traits": {
+    "Vitality": 6,
+    "Erudition": 3,
+    "Proficiency": 0,
+    "Songchant": 3
+   },
+   "traitsPoints": 0,
+   "buildDescription": "subscribe to feiitaan on youtube plez!!!1",
+   "points": 0,
+   "pointSpent": 330,
+   "meta": {
+    "Origin": "Justicar",
+    "Oath": "Linkstrider",
+    "Outfit": "None",
+    "Race": "None",
+    "Murmur": "Ardour",
+    "Bell": "Sacred Field"
+   },
+   "buildAuthor": "",
+   "flaw1": "None",
+   "flaw2": "None",
+   "flaw3": "None",
+   "pointsUntilNextPower": 0,
+   "power": 20,
+   "boon1": "None",
+   "boon2": "None"
+  },
+  "attributes": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 0,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 76,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 20,
+    "Flamecharm": 0,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 60,
+    "Intelligence": 40,
+    "Agility": 25,
+    "Willpower": 40,
+    "Strength": 20,
+    "Fortitude": 50
+   }
+  },
+  "content": {
+   "mantraModifications": {
+    "Sing": {},
+    "Taunt": {},
+    "Reinforce": {},
+    "Symbiotic Sustain": {},
+    "Alsin's Aid": {},
+    "Metal Rain": {},
+    "Warden Blades": {},
+    "Frozen Servants": {},
+    "Crystal Impale": {}
+   },
+   "notes": ""
+  },
+  "meta": {
+   "votes": {
+    "up": 0,
+    "down": 0,
+    "voters": {}
+   },
+   "views": 5991,
+   "tags": [
+    "Advanced",
+    "Linkstrider"
+   ],
+   "saved": 5,
+   "visibility": "public",
+   "private": false,
+   "comments": {
+    "count": 0,
+    "lastActivity": null
+   }
+  },
+  "talents": [
+   "Command: Summon",
+   "Vow of Mastery",
+   "Dazing Finisher",
+   "Charismatic Cast",
+   "Chaotic Charm",
+   "Lasting Charisma",
+   "Neuroplasticity",
+   "Golden Tongue",
+   "Bloodiron Spirit",
+   "Fishman",
+   "Charisma Unbounded",
+   "Unnecessary Theatrics",
+   "Manipulator",
+   "Narcissist",
+   "Replenishing Knockout",
+   "Propagandalist",
+   "Command: Live",
+   "Ardour Scream",
+   "Cornered Fool",
+   "Ghost",
+   "Swift Rebound",
+   "Evasive Expert",
+   "Risky Moves",
+   "Reshape and Remold",
+   "Gilded Path: Scrapsinger",
+   "Artisan's Blade",
+   "Masterwork",
+   "Refine and Reuse",
+   "Songs Unforged",
+   "Phantom Edge",
+   "An Ironsinger's Instinct",
+   "Rending Needle: Conductor",
+   "Master Ironsinger",
+   "Expert Ironsinger",
+   "Adept Ironsinger",
+   "Ironsinger",
+   "Speed Demon",
+   "Exposed Durability",
+   "Heavy Shoulders",
+   "Ironclad Punishment",
+   "Oh The Irony",
+   "Polished Armor",
+   "Metal Thief",
+   "Fast Blade",
+   "Conductor's Cable",
+   "Blade Dancer",
+   "Spinning Swordsman",
+   "Conditioned Swimmer",
+   "Oath: Linkstrider",
+   "Justicar's Call",
+   "Conditioned Runner",
+   "Endurance Runner",
+   "Scaredy Cat",
+   "Overflowing Dam",
+   "Perfect Flash",
+   "Everchanging Aegis",
+   "Carnivore",
+   "Spine Cutter",
+   "Eureka",
+   "Strong Stern",
+   "Concussion",
+   "Exoskeleton",
+   "To The Finish",
+   "Lightspeed Reflexes",
+   "Thresher Claws",
+   "Chronostasis",
+   "Grand Feast",
+   "Ironsing Unbounded",
+   "Frostdraw Unbounded",
+   "Master Frostdrawer",
+   "Expert Frostdrawer",
+   "Adept Frostdrawer",
+   "Frostdrawer",
+   "Battle Tendency",
+   "Moving Fortress",
+   "Braced Collapse",
+   "Perseverance",
+   "Underdog",
+   "Condensation Drip",
+   "Chilling Flourish",
+   "Nullifying Clarity",
+   "Charged Return",
+   "Concussive Force",
+   "Orbital Ice",
+   "Glacial Coasting",
+   "Crystal Shrapnel",
+   "Glass Path: Crystallization",
+   "Reclaimed Glass",
+   "Old Habits Die Hard",
+   "Last Resort",
+   "Cryonis",
+   "Disbelief",
+   "Conquer your Fears",
+   "Breathing Exercise",
+   "The Eleventh Hour",
+   "Ready or Not",
+   "Full Reset",
+   "Turtle Shell",
+   "Knight's Rally",
+   "Magical Resolve",
+   "Grasp on Reality",
+   "Bear Trap",
+   "Matador",
+   "Emergency Mark",
+   "Justicar's Mark",
+   "Justicar's Blessing",
+   "Kindness",
+   "Mark Mastery",
+   "Righteous Violence",
+   "Symbiotic Link",
+   "Entropy Link",
+   "Murmur: Ardour"
+  ],
+  "weapons": "Iron Spear",
+  "enchant": "Sear",
+  "motif": "Trident Spear",
+  "thumbnail": "",
+  "weaponStars": {
+   "count": 0,
+   "mod": ""
+  },
+  "preShrine": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 0,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 1,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 75,
+    "Flamecharm": 0,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 85,
+    "Intelligence": 1,
+    "Agility": 40,
+    "Willpower": 1,
+    "Strength": 1,
+    "Fortitude": 1
+   }
+  },
+  "favoritedTalents": [],
+  "mantras": [
+   "Sing",
+   "Taunt",
+   "Reinforce",
+   "Symbiotic Sustain",
+   "Alsin's Aid",
+   "Metal Rain",
+   "Warden Blades",
+   "Frozen Servants",
+   "Crystal Impale"
+  ],
+  "postShrine": {
+   "weapon": {
+    "Light Wep.": 0,
+    "Medium Wep.": 0,
+    "Heavy Wep.": 0
+   },
+   "attunement": {
+    "Thundercall": 0,
+    "Frostdraw": 0,
+    "Shadowcast": 0,
+    "Galebreathe": 0,
+    "Ironsing": 0,
+    "Flamecharm": 0,
+    "Bloodrend": 0
+   },
+   "base": {
+    "Charisma": 0,
+    "Intelligence": 0,
+    "Agility": 0,
+    "Willpower": 0,
+    "Strength": 0,
+    "Fortitude": 0
+   }
+  },
+  "preMastery": {},
+  "postMastery": {},
+  "equipment": {
+   "Head": null,
+   "Arms": null,
+   "Legs": null,
+   "Torso": null,
+   "Face": null,
+   "Earrings": null,
+   "Rings": [
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  "multifaceted": true
+ }
+}
