@@ -5,7 +5,8 @@ class SlimData(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         subprocess.check_call([sys.executable, os.path.join(ROOT, "pipeline", "slimdata.py")], cwd=ROOT)
-        cls.g = json.load(open(os.path.join(ROOT, "data", "game.json"), encoding="utf-8"))
+        with open(os.path.join(ROOT, "data", "game.json"), encoding="utf-8") as f:
+            cls.g = json.load(f)
 
     def test_sizes(self):
         self.assertLess(os.path.getsize(os.path.join(ROOT, "data", "game.json")), 400_000)
@@ -27,15 +28,15 @@ class SlimData(unittest.TestCase):
         self.assertEqual(self.g["slots"]["Combat"], 3)
 
     def test_js_twin(self):
-        js = open(os.path.join(ROOT, "data", "game.js"), encoding="utf-8").read()
+        with open(os.path.join(ROOT, "data", "game.js"), encoding="utf-8") as f:
+            js = f.read()
         self.assertTrue(js.startswith("export default "))
 
     def test_voi_filtering(self):
-        # Verify VOI (legacy variant) entries are filtered out
-        for talent_name in self.g["talents"]:
-            self.assertNotIn("(VOI)", talent_name, f"VOI entry found in talents: {talent_name}")
-        for mantra_name in self.g["mantras"]:
-            self.assertNotIn("(VOI)", mantra_name, f"VOI entry found in mantras: {mantra_name}")
+        # Verify VOI-only talents are filtered out (known VOI-only talent)
+        self.assertNotIn("Residual Fury", self.g["talents"], "VOI-only talent should be filtered out")
+        # Verify Ether Surge (VOI-marked enchant) is filtered out
+        self.assertNotIn("Ether Surge", self.g["enchants"], "VOI-marked enchant should be filtered out")
         # Verify Burning Servants has real (non-VOI) requirements
         self.assertIn("Burning Servants", self.g["mantras"])
         self.assertEqual(self.g["mantras"]["Burning Servants"]["reqs"], {"Flamecharm": 1})
