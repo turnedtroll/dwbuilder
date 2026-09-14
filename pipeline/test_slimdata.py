@@ -9,8 +9,8 @@ class SlimData(unittest.TestCase):
 
     def test_sizes(self):
         self.assertLess(os.path.getsize(os.path.join(ROOT, "data", "game.json")), 400_000)
-        self.assertGreater(len(self.g["talents"]), 1000)
-        self.assertGreater(len(self.g["mantras"]), 250)
+        self.assertGreater(len(self.g["talents"]), 890)
+        self.assertGreater(len(self.g["mantras"]), 230)
 
     def test_known_entries(self):
         t = self.g["talents"]["Command: Live"]
@@ -29,3 +29,13 @@ class SlimData(unittest.TestCase):
     def test_js_twin(self):
         js = open(os.path.join(ROOT, "data", "game.js"), encoding="utf-8").read()
         self.assertTrue(js.startswith("export default "))
+
+    def test_voi_filtering(self):
+        # Verify VOI (legacy variant) entries are filtered out
+        for talent_name in self.g["talents"]:
+            self.assertNotIn("(VOI)", talent_name, f"VOI entry found in talents: {talent_name}")
+        for mantra_name in self.g["mantras"]:
+            self.assertNotIn("(VOI)", mantra_name, f"VOI entry found in mantras: {mantra_name}")
+        # Verify Burning Servants has real (non-VOI) requirements
+        self.assertIn("Burning Servants", self.g["mantras"])
+        self.assertEqual(self.g["mantras"]["Burning Servants"]["reqs"], {"Flamecharm": 1})

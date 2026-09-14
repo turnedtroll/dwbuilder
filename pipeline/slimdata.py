@@ -32,6 +32,9 @@ def main():
     D = g["data"]
     talents = {}
     for t in D["talents"]:
+        # Skip VOI (legacy variant) entries
+        if t.get("VOI") or "(VOI)" in (t.get("_id") or "") or "(VOI)" in (t.get("name") or ""):
+            continue
         r = t.get("requirements") or {}
         rarity = t.get("rarity")
         # Drop desc for all talents to reduce file size
@@ -45,12 +48,15 @@ def main():
         }
     mantras = {}
     for m in D["mantras"]:
+        # Skip VOI (legacy variant) entries
+        if m.get("VOI") or "(VOI)" in (m.get("_id") or "") or "(VOI)" in (m.get("name") or ""):
+            continue
         attrs = m.get("attributes") or []
         mantras[m["name"]] = {"attunement": attrs[0] if attrs else None, "reqs": reqs_of(m), "category": m.get("category"),
                               "type": m.get("type") or "Normal", "desc": short(m.get("description")), "modifiers": list(m.get("modifiers") or [])}
-    weapons = {w["name"]: {"type": w.get("type"), "wtype": wtype(w), "reqs": reqs_of(w), "talents": list(w.get("grantedTalents") or [])} for w in D["weapons"]}
-    outfits = {o["name"]: {"reqs": reqs_of(o), "origin": (o.get("requirements") or {}).get("origin"), "talents": list(o.get("grantedTalents") or [])} for o in D["outfits"]}
-    equipment = {e["name"]: {"slot": e.get("type"), "talents": list(e.get("innateTalents") or []), "reqs": reqs_of(e)} for e in g["equipmentData"]}
+    weapons = {w["name"]: {"type": w.get("type"), "wtype": wtype(w), "reqs": reqs_of(w), "talents": list(w.get("grantedTalents") or [])} for w in D["weapons"] if not (w.get("VOI") or "(VOI)" in (w.get("_id") or "") or "(VOI)" in (w.get("name") or ""))}
+    outfits = {o["name"]: {"reqs": reqs_of(o), "origin": (o.get("requirements") or {}).get("origin"), "talents": list(o.get("grantedTalents") or [])} for o in D["outfits"] if not (o.get("VOI") or "(VOI)" in (o.get("_id") or "") or "(VOI)" in (o.get("name") or ""))}
+    equipment = {e["name"]: {"slot": e.get("type"), "talents": list(e.get("innateTalents") or []), "reqs": reqs_of(e)} for e in g["equipmentData"] if not (e.get("VOI") or "(VOI)" in (e.get("_id") or "") or "(VOI)" in (e.get("name") or ""))}
     oaths = {o["name"]: {"slots": o.get("slots") or {}, "mantras": o.get("mantras") or {}} for o in g["oathsData"]}
     races = {a["name"]: a.get("statBonuses") or {} for a in g["aspectsData"]}
     # enumerations come from the build corpus (the builder keeps them in UI code, not game data)
