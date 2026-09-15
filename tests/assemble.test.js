@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { normalizeRequest, selectArchetype, planStats, fitTo330 } from "../engine/assemble.js";
+import { normalizeRequest, selectArchetype, planStats, fitTo330, assemble } from "../engine/assemble.js";
 import { pointsSpent, zeroFlat, ATTUNEMENTS, WEAPON_STATS } from "../engine/stats.js";
 import { shrineOfOrder } from "../engine/shrine.js";
+import { validate } from "../engine/validate.js";
 const game = JSON.parse(readFileSync(new URL("../data/game.json", import.meta.url)));
 const A = JSON.parse(readFileSync(new URL("../data/archetypes.json", import.meta.url))).archetypes;
 
@@ -66,4 +67,38 @@ test("fitTo330 records every raise, even ones that land below the stat's own p75
   for (const s of Object.keys(final)) {
     if (final[s] > (target[s] ?? 0)) assert.ok(raised.some(r => r.stat === s), `${s} raised but missing from the raised list`);
   }
+});
+
+test("assemble: every archetype's default request is valid and scores >= 70", () => {
+  const bad = [];
+  for (const a of A) {
+    const b = assemble({ role: a.role, oath: a.oath[0]?.[0] ?? null }, A.filter(x => x.id === a.id), game);
+    if (!b.validation.ok || b.meta_score < 70) bad.push({ id: a.id, score: b.meta_score, errors: b.validation.errors.slice(0, 4) });
+  }
+  assert.deepEqual(bad, [], JSON.stringify(bad, null, 1));
+});
+
+test("assemble: attunement include/exclude and weapon types stay valid", () => {
+  const combos = [];
+  for (const role of ["healer", "dps", "tank", "mage"]) for (const att of ATTUNEMENTS) combos.push({ role, include_attunements: [att] }, { role, exclude_attunements: [att] });
+  for (const wt of ["light", "medium", "heavy", "none"]) combos.push({ role: "dps", weapon_type: wt }, { role: "tank", weapon_type: wt });
+  combos.push({ role: "healer", shrine: false }, { role: "dps", shrine: false, weapon_type: "heavy" });
+  const bad = [];
+  for (const c of combos) { const b = assemble(c, A, game); if (!b.validation.ok) bad.push({ c, errors: b.validation.errors.slice(0, 3) }); }
+  assert.deepEqual(bad, [], JSON.stringify(bad, null, 1));
+});
+
+test("must/avoid are honoured or reported", () => {
+  const b = assemble({ role: "healer", must_talents: ["Command: Live"], avoid_mantras: ["Flame of Denial"], avoid_talents: ["Flame of Denial"] }, A, game);
+  assert.ok(b.talents.includes("Command: Live") || b.validation.warnings.some(w => w.msg.includes("Command: Live")));
+  assert.ok(!b.mantras.includes("Flame of Denial")); assert.ok(!b.talents.includes("Flame of Denial"));
+  assert.ok(b.final.Charisma >= 75);
+});
+
+test("guide and draft are populated", () => {
+  const b = assemble({ role: "dps" }, A, game);
+  assert.ok(b.guide.length >= 3);
+  assert.ok(b.guide.some(g => g.phase === "shrine"));
+  assert.equal(b.draft.version, 3);
+  assert.equal(b.draft.stats.buildName, b.name);
 });
