@@ -4,7 +4,7 @@ builder (via Playwright, mirroring pipeline/dwfill.py's injection route) and
 report back power / points spent / issue count for each one.
 
 Usage:
-    python verify_builder.py <file-or-dir> [--headless] [--show] [--keep]
+    python verify_builder.py <file-or-dir> [--show] [--keep]
                               [--screenshot-dir DIR] [--profile DIR]
 
 Prints one JSON line per build to stdout (nothing else goes to stdout, so
@@ -110,11 +110,10 @@ def set_draft_and_load(page, ctx, env, deadline_s=60):
 def verify_one(page, ctx, build_id, env, headless_fallback_allowed, args):
     state, status = set_draft_and_load(page, ctx, env)
 
-    headless_fallback = False
     settled = state and not state.get("loading") and \
         (state.get("current") or {}).get("stats", {}).get("buildName") == env["build"]["stats"]["buildName"]
 
-    if (not settled) and headless_fallback_allowed and (status is None or status >= 400 or not settled):
+    if (not settled) and headless_fallback_allowed:
         log(f"[verify] {build_id}: headless attempt did not settle (HTTP {status}); retrying headless=False")
         return None  # signal caller to redo with a visible context
 
@@ -157,8 +156,6 @@ def verify_one(page, ctx, build_id, env, headless_fallback_allowed, args):
         "shrineMode": state.get("shrineMode"),
         "phase": env.get("phase"),
     }
-    if headless_fallback:
-        result["headlessFallback"] = True
 
     if args.screenshot_dir:
         try:
@@ -189,16 +186,45 @@ def launch_context(p, profile, headless):
     return p.chromium.launch_persistent_context(**launch_kwargs)
 
 
+def safe_launch(p, profile, headless, build_id, label):
+    """launch_context, but never raise: log and return None on failure so a
+    relaunch attempt can't kill the whole sweep."""
+    try:
+        return launch_context(p, profile, headless)
+    except Exception as e:
+        log(f"[verify] {build_id}: {label} relaunch failed: {e}")
+        return None
+
+
+def ctx_alive(ctx):
+    try:
+        _ = ctx.pages
+        return True
+    except Exception:
+        return False
+
+
+def failure_line(build_id, env, issue, headless_fallback=False):
+    line = {
+        "id": build_id, "ok": False, "power": None, "pointSpent": None,
+        "issueCount": None, "issues": [issue],
+        "talentsAccepted": None, "talentsSent": len(env["build"].get("talents", [])),
+        "shrineMode": None, "phase": env.get("phase"),
+    }
+    if headless_fallback:
+        line["headlessFallback"] = True
+    return line
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("path", help="a single exported build JSON file, or a directory of them")
-    ap.add_argument("--headless", action="store_true", default=True, help="run headless (default)")
-    ap.add_argument("--show", action="store_true", help="watch in a visible window (overrides --headless)")
+    ap.add_argument("--show", action="store_true", help="watch in a visible window (default: headless)")
     ap.add_argument("--keep", action="store_true", help="keep the browser open after the run")
     ap.add_argument("--screenshot-dir", default=None)
     ap.add_argument("--profile", default=DEFAULT_PROFILE_VERIFY)
     args = ap.parse_args()
-    headless = args.headless and not args.show
+    headless = not args.show
 
     os.makedirs(args.profile, exist_ok=True)
     builds = list(load_builds(args.path))
@@ -213,8 +239,10 @@ def main():
                 log(f"[verify] ERROR: the Chrome profile {args.profile} is already open. "
                     "Close that window first, or pass --profile <other dir>.")
                 sys.exit(2)
-            log(f"[verify] ERROR: could not launch Chrome/Playwright: {e}")
-            print(json.dumps({"id": None, "ok": False, "error": f"BLOCKED: {e}"}))
+            # Preferred fix for a total launch failure: no stdout line at all (a
+            # partial-schema line would break the one-JSON-line-per-build
+            # contract), just a BLOCKED diagnostic on stderr and a non-zero exit.
+            log(f"[verify] BLOCKED: could not launch Chrome/Playwright: {e}")
             sys.exit(1)
 
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
@@ -226,43 +254,62 @@ def main():
                 result = verify_one(page, ctx, build_id, env, headless_fallback_allowed=headless, args=args)
             except Exception as e:
                 log(f"[verify] {build_id}: exception during verify: {e}")
-                result = {
-                    "id": build_id, "ok": False, "power": None, "pointSpent": None,
-                    "issueCount": None, "issues": [f"exception: {e}"],
-                    "talentsAccepted": None, "talentsSent": len(env["build"].get("talents", [])),
-                    "shrineMode": None, "phase": env.get("phase"),
-                }
+                result = failure_line(build_id, env, f"exception: {e}")
 
             if result is None:
-                # headless attempt did not settle; retry this one build with a visible context
-                try:
-                    ctx.close()
-                except Exception:
-                    pass
-                ctx = launch_context(p, args.profile, False)
-                page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                page.on("dialog", lambda d: d.accept())
-                try:
-                    result = verify_one(page, ctx, build_id, env, headless_fallback_allowed=False, args=args)
-                    if result:
-                        result["headlessFallback"] = True
-                except Exception as e:
-                    log(f"[verify] {build_id}: exception during headless-fallback verify: {e}")
-                    result = {
-                        "id": build_id, "ok": False, "power": None, "pointSpent": None,
-                        "issueCount": None, "issues": [f"exception: {e}"],
-                        "talentsAccepted": None, "talentsSent": len(env["build"].get("talents", [])),
-                        "shrineMode": None, "phase": env.get("phase"), "headlessFallback": True,
-                    }
-                # go back to headless for subsequent builds
-                if headless:
+                # Headless attempt did not settle; retry this one build with a
+                # visible context. Launch the replacement BEFORE closing the
+                # current one, so a relaunch failure leaves a still-usable
+                # context in hand instead of stranding the whole sweep.
+                visible_ctx = safe_launch(p, args.profile, False, build_id, "visible-mode")
+                if visible_ctx is not None:
                     try:
                         ctx.close()
                     except Exception:
                         pass
-                    ctx = launch_context(p, args.profile, True)
+                    ctx = visible_ctx
                     page = ctx.pages[0] if ctx.pages else ctx.new_page()
                     page.on("dialog", lambda d: d.accept())
+                    try:
+                        result = verify_one(page, ctx, build_id, env, headless_fallback_allowed=False, args=args)
+                        if result:
+                            result["headlessFallback"] = True
+                    except Exception as e:
+                        log(f"[verify] {build_id}: exception during headless-fallback verify: {e}")
+                        result = failure_line(build_id, env, f"exception: {e}", headless_fallback=True)
+
+                    # Try to go back to headless for subsequent builds; if that
+                    # relaunch fails, keep using the working visible context
+                    # rather than losing the rest of the sweep.
+                    if headless:
+                        headless_ctx = safe_launch(p, args.profile, True, build_id, "headless-restore")
+                        if headless_ctx is not None:
+                            try:
+                                ctx.close()
+                            except Exception:
+                                pass
+                            ctx = headless_ctx
+                            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                            page.on("dialog", lambda d: d.accept())
+                        else:
+                            log(f"[verify] {build_id}: continuing remaining builds in visible "
+                                "mode (headless-restore relaunch failed)")
+                            headless = False
+                else:
+                    # The visible-mode relaunch failed. We never closed the old
+                    # (headless) context, so it may still be alive -- reuse it
+                    # for the rest of the sweep instead of aborting outright.
+                    result = failure_line(
+                        build_id, env, "relaunch failed: could not open a visible-mode context",
+                        headless_fallback=True,
+                    )
+                    if not ctx_alive(ctx):
+                        print(json.dumps(result))
+                        sys.stdout.flush()
+                        results.append(result)
+                        log("[verify] BLOCKED: no browser context is available after a failed "
+                            "relaunch; stopping the sweep.")
+                        sys.exit(1)
 
             print(json.dumps(result))
             sys.stdout.flush()
