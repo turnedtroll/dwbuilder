@@ -60,7 +60,11 @@ function scoreArchetype(req, a) {
     const w = canon(req.weapon_type) ?? req.weapon_type;
     if (topWeaponStat(a) === w) score += 15;
   }
-  if (req.oath && a.oath?.[0]?.[0] === req.oath) score += 10;
+  // An explicitly requested oath is a strong identity signal, not a minor tiebreaker: the oath
+  // brings its own must-have mantras/talents (e.g. Linkstrider's healer kit), so it should outweigh
+  // a single include-attunement match (+20) or the weapon-type match (+15). Weighted at +30 so a
+  // requested oath's archetype wins over a same-role archetype that only matches attunement/weapon.
+  if (req.oath && a.oath?.[0]?.[0] === req.oath) score += 30;
   score += Math.log10(Math.max(1, a.views_total ?? 1));
   return score;
 }
@@ -305,7 +309,12 @@ export function planStats(req, archetype, game) {
   }
   for (const incRaw of req.include_attunements) {
     const inc = canon(incRaw) ?? incRaw;
-    if ((target[inc] ?? 0) < 20) {
+    const before = target[inc] ?? 0;
+    // An explicitly requested attunement is a build feature the user wants front and center, not
+    // just "not excluded" — 40 is the floor for it regardless of whether the archetype's own modal
+    // happens to already sit a little above 0 (e.g. 21-39): a barely-invested archetype value isn't
+    // evidence the user wants less than the requested-attunement floor.
+    if (before < 40) {
       target[inc] = 40;
       if (pre) pre[inc] = Math.max(pre[inc] ?? 0, 1);
       notes.push(`${inc} added at 40`);
