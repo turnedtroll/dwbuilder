@@ -1,5 +1,7 @@
 data/raw/
 node_modules/
 pipeline/chrome-profile/
+pipeline/chrome-profile-verify/
+out/
 *.png
 __pycache__/
