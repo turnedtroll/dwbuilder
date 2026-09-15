@@ -23,6 +23,7 @@ class Mine(unittest.TestCase):
             self.assertIn(x["stack"]["stat"], x["pre_shrine_modal"].keys())
             self.assertEqual(sum(1 for v in x["post_shrine_modal"].values()), 16)
             self.assertTrue(327 <= points_spent(x["post_shrine_modal"]) <= 333, x["id"])
+        self.assertEqual(len({x["id"] for x in self.a["archetypes"]}), len(self.a["archetypes"]))
 
     def test_names_resolve_to_game_data(self):
         for x in self.a["archetypes"]:

@@ -127,8 +127,11 @@ def summarize(key, members, game, resolve):
     stack_stat = max(CORE, key=lambda s: pre_modal_old[s]) if pre_src else max(CORE, key=lambda s: post_modal_old[s])
     stack_vals = [m["pre"][stack_stat] for m in pre_src] or [m["final"][stack_stat] for m in members]
     powers = [power_for(m["pre"]) for m in pre_src] or [12]
-    tal = Counter(t for m in members for t in set(filter(None, map(resolve, m["talents"]))))
-    man = Counter(t for m in members for t in set(m["mantras"]) if t in game["mantras"])
+    # dict.fromkeys (not set()) for per-member dedup: iteration order must be deterministic
+    # (insertion order from the source list) so Counter.most_common()'s tie-breaking at the
+    # freq() truncation boundary doesn't depend on Python's per-process string hash seed.
+    tal = Counter(t for m in members for t in dict.fromkeys(filter(None, map(resolve, m["talents"]))))
+    man = Counter(t for m in members for t in dict.fromkeys(t for t in m["mantras"] if t in game["mantras"]))
     gems = defaultdict(Counter)
     for m in members:
         for name, mod in m["mods"].items():
@@ -171,6 +174,10 @@ def main():
     for x in kept: x["role"] = role_of({"mantras": x["mantras"]}, x["final"], x["talents"], x["oath"])
     groups = cluster(kept)
     arch = sorted((summarize(k, v, game, resolve) for k, v in groups.items()), key=lambda a: -a["views_total"])
+    seen_ids = Counter()
+    for a in arch:
+        seen_ids[a["id"]] += 1
+        if seen_ids[a["id"]] > 1: a["id"] = f"{a['id']}-{seen_ids[a['id']]}"
     out = {"meta": {"generated": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"), "builds_in": len(raw), "builds_kept": len(kept), "archetypes": len(arch)}, "archetypes": arch}
     with open(os.path.join(ROOT, "data", "archetypes.json"), "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, separators=(",", ":"))
