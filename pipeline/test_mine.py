@@ -1,6 +1,7 @@
 import json, os, unittest, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))
+from mine import points_spent
 
 class Mine(unittest.TestCase):
     @classmethod
@@ -21,6 +22,7 @@ class Mine(unittest.TestCase):
             self.assertEqual(len(x["example_ids"]), min(3, x["members"]))
             self.assertIn(x["stack"]["stat"], x["pre_shrine_modal"].keys())
             self.assertEqual(sum(1 for v in x["post_shrine_modal"].values()), 16)
+            self.assertTrue(327 <= points_spent(x["post_shrine_modal"]) <= 333, x["id"])
 
     def test_names_resolve_to_game_data(self):
         for x in self.a["archetypes"]:

@@ -104,10 +104,27 @@ def summarize(key, members, game, resolve):
     n = len(members); members = sorted(members, key=lambda x: -x["views"])
     shrined = [m for m in members if m["shrined"]]
     pre_src = shrined if len(shrined) >= max(2, n // 3) else []
-    pre_modal = {s: modal([m["pre"][s] for m in pre_src]) if pre_src else 0 for s in ALL}
-    post_modal = {s: modal([m["final"][s] for m in members]) for s in ALL}
+    # Per-stat modals for stack_stat selection (old logic kept for backward compat in stack computation)
+    pre_modal_old = {s: modal([m["pre"][s] for m in pre_src]) if pre_src else 0 for s in ALL}
+    post_modal_old = {s: modal([m["final"][s] for m in members]) for s in ALL}
+
+    # Compute L1-medoid: member minimizing sum of L1 distances to all members; ties -> higher views
+    def l1_dist(m1_stats, m2_stats):
+        return sum(abs(m1_stats.get(s, 0) - m2_stats.get(s, 0)) for s in ALL)
+    medoid = min(members, key=lambda m: (sum(l1_dist(m["final"], o["final"]) for o in members), -m["views"]))
+    post_shrine_modal = dict(medoid["final"])  # Medoid member's real stats (coherent build)
+
+    # Pre-shrine modal: medoid's pre if shrined, else L1-medoid of pre_src, else all zeros
+    if medoid["shrined"] and medoid["pre"]:
+        pre_shrine_modal = dict(medoid["pre"])
+    elif pre_src:
+        pre_medoid = min(pre_src, key=lambda m: (sum(l1_dist(m["pre"], o["pre"]) for o in pre_src), -m["views"]))
+        pre_shrine_modal = dict(pre_medoid["pre"])
+    else:
+        pre_shrine_modal = {s: 0 for s in ALL}
+
     spread = {s: {"p25": pct([m["final"][s] for m in members], .25), "p50": pct([m["final"][s] for m in members], .5), "p75": pct([m["final"][s] for m in members], .75)} for s in ALL}
-    stack_stat = max(CORE, key=lambda s: pre_modal[s]) if pre_src else max(CORE, key=lambda s: post_modal[s])
+    stack_stat = max(CORE, key=lambda s: pre_modal_old[s]) if pre_src else max(CORE, key=lambda s: post_modal_old[s])
     stack_vals = [m["pre"][stack_stat] for m in pre_src] or [m["final"][stack_stat] for m in members]
     powers = [power_for(m["pre"]) for m in pre_src] or [12]
     tal = Counter(t for m in members for t in set(filter(None, map(resolve, m["talents"]))))
@@ -125,15 +142,15 @@ def summarize(key, members, game, resolve):
                 if isinstance(item, dict) and item.get("name"): c[item["name"]] += 1
         equip[slot] = freq(c, 6, n)
     role, wtype = key[0], key[1]
-    atts = key[2] if len(key) > 2 else tuple(a for a in ATT if post_modal[a] >= 40)
+    atts = key[2] if len(key) > 2 else tuple(a for a in ATT if post_modal_old[a] >= 40)
     oath = key[3] if len(key) > 3 else modal([m["oath"] for m in members])
     ident = "-".join([role, wtype, *(a.lower()[:5] for a in atts), oath.lower()]).replace(" ", "")
     return {
         "id": ident, "role": role, "label": f"{role.title()} · {'/'.join(atts) or 'attunementless'} · {wtype if wtype != 'none' else 'no weapon'} · {oath}",
         "members": n, "example_ids": [m["id"] for m in members[:3]], "views_total": sum(m["views"] for m in members),
         "stack": {"stat": stack_stat, "min": pct(stack_vals, .25), "modal": modal(stack_vals)},
-        "pre_shrine_modal": pre_modal, "shrine_power_modal": modal(powers), "shrine_power_window": [min(powers), max(powers)],
-        "shrined_rate": round(len(shrined) / n, 3), "post_shrine_modal": post_modal, "post_shrine_spread": spread,
+        "pre_shrine_modal": pre_shrine_modal, "shrine_power_modal": modal(powers), "shrine_power_window": [min(powers), max(powers)],
+        "shrined_rate": round(len(shrined) / n, 3), "post_shrine_modal": post_shrine_modal, "post_shrine_spread": spread,
         "talent_freq": freq(tal, 120, n), "mantra_freq": freq(man, 40, n),
         "gem_freq": {k: freq(v, 3, sum(v.values())) for k, v in gems.items()},
         "oath": freq(Counter(m["oath"] for m in members), 5, n), "origin": freq(Counter(m["origin"] for m in members), 5, n),
