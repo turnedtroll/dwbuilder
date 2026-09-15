@@ -227,6 +227,14 @@ def main():
     headless = not args.show
 
     os.makedirs(args.profile, exist_ok=True)
+    # Chrome enforces one live process per user-data-dir (a second launch on a locked
+    # profile silently forwards to the existing instance and exits, which Playwright
+    # sees as "Target page, context or browser has been closed"). The visible-mode
+    # fallback below launches its replacement context *before* closing the current
+    # one (intentionally, so a relaunch failure doesn't strand the whole sweep), so
+    # it needs its own profile dir to avoid colliding with the still-open original.
+    fallback_profile = args.profile.rstrip("/\\") + "-fallback"
+    os.makedirs(fallback_profile, exist_ok=True)
     builds = list(load_builds(args.path))
     log(f"[verify] loaded {len(builds)} build(s) from {args.path}; headless={headless}")
 
@@ -261,7 +269,7 @@ def main():
                 # visible context. Launch the replacement BEFORE closing the
                 # current one, so a relaunch failure leaves a still-usable
                 # context in hand instead of stranding the whole sweep.
-                visible_ctx = safe_launch(p, args.profile, False, build_id, "visible-mode")
+                visible_ctx = safe_launch(p, fallback_profile, False, build_id, "visible-mode")
                 if visible_ctx is not None:
                     try:
                         ctx.close()
