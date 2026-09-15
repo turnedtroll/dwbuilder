@@ -107,3 +107,17 @@ test("guide and draft are populated", () => {
   assert.equal(b.draft.version, 3);
   assert.equal(b.draft.stats.buildName, b.name);
 });
+
+test("guide post-phase order: only requested stats jump the queue", () => {
+  const b1 = assemble({ role: "mage" }, A, game);
+  const steps1 = b1.guide.filter(g => g.phase === "post").map(g => g.step);
+  const vals1 = steps1.map(s => b1.final[s.split(" →")[0]]);
+  for (let i = 1; i < vals1.length; i++) {
+    assert.ok(vals1[i] <= vals1[i - 1], JSON.stringify({ steps: steps1, vals: vals1 }));
+  }
+
+  const b2 = assemble({ role: "mage", include_attunements: ["Frostdraw"] }, A, game);
+  const steps2 = b2.guide.filter(g => g.phase === "post").map(g => g.step);
+  const frostdrawGrew = steps2.some(s => s.startsWith("Frostdraw →"));
+  if (frostdrawGrew) assert.ok(steps2[0].startsWith("Frostdraw →"), JSON.stringify(steps2));
+});

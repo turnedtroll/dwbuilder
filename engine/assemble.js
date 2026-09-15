@@ -659,10 +659,37 @@ function stackFirst(order, stack) {
   return [stack, ...order.filter(s => s !== stack)];
 }
 
+// The set of stats buildGuide's post phase should let jump the queue ahead of plain final-value-desc
+// ordering: attunements the request explicitly asked to include, plus every stat named in a reqs
+// block of a must_talent/must_mantra the request asked for (canon'd, same resolution as planStats
+// step 5's applyReqs) — i.e. only stats the request actually asked for, never "every attunement"
+// just because it happens to be one.
+function priorityStats(req, game) {
+  const set = new Set();
+  for (const raw of req.include_attunements) set.add(canon(raw) ?? raw);
+  const addReqs = reqs => {
+    for (const k of Object.keys(reqs ?? {})) {
+      if (IGNORE_REQ_KEYS.has(k)) continue;
+      const c = canon(k);
+      if (c) set.add(c);
+    }
+  };
+  for (const name of req.must_talents) {
+    const resolved = resolveTalent(name, game);
+    if (resolved) addReqs(game.talents[resolved]?.reqs);
+  }
+  for (const name of req.must_mantras) addReqs(game.mantras[name]?.reqs);
+  return set;
+}
+
 // §Task 10.4: build the step-by-step levelling guide for an already-assembled BuildCore-ish `build`
-// ({shrine, preShrine, final, race, multifaceted, talents, mantras, stack}). Steps raise one stat at
-// a time; the pre-shrine phase leads with the archetype's stack stat (`build.stack`, when it was
-// actually invested pre-shrine), then the remaining invested pre stats by descending value. `unlocks`
+// ({shrine, preShrine, final, race, multifaceted, talents, mantras, stack, priority}). Steps raise
+// one stat at a time; the pre-shrine phase leads with the archetype's stack stat (`build.stack`, when
+// it was actually invested pre-shrine), then the remaining invested pre stats by descending value.
+// The post phase leads with whatever's in `build.priority` (a Set from `priorityStats`: attunements
+// the request explicitly included, plus stats a must_talent/must_mantra actually needs) by descending
+// final value, then every other grown stat by descending final value — NOT "every attunement first":
+// an attunement the request never asked for sorts on its value like any base/weapon stat. `unlocks`
 // lists talents (and, in the post/no-shrine phases, mantras) whose reqs newly become met by that
 // step, simulated by comparing meetsStats() against the cumulative flat stats just before vs. after.
 export function buildGuide(build, game) {
@@ -684,10 +711,11 @@ export function buildGuide(build, game) {
     guide.push({ phase: "shrine", step: `Shrine of Order at Power ${power}`, unlocks: [], detail });
 
     const grew = ALL_STATS.filter(s => (build.final[s] ?? 0) > (base[s] ?? 0));
-    const attnFirst = grew.filter(s => ATTUNEMENTS.includes(s));
-    const rest = grew.filter(s => !ATTUNEMENTS.includes(s));
+    const priority = build.priority ?? new Set();
+    const jumps = grew.filter(s => priority.has(s));
+    const rest = grew.filter(s => !priority.has(s));
     const byFinalDesc = arr => [...arr].sort((a, b) => (build.final[b] - build.final[a]) || (ALL_STATS.indexOf(a) - ALL_STATS.indexOf(b)));
-    const order = [...byFinalDesc(attnFirst), ...byFinalDesc(rest)];
+    const order = [...byFinalDesc(jumps), ...byFinalDesc(rest)];
 
     let cumPost = { ...base };
     for (const s of order) {
@@ -753,7 +781,7 @@ export function assemble(partialRequest, archetypes, game) {
   }
 
   const { score, breakdown } = scoreBuild(core, archetype, game);
-  const guide = buildGuide({ ...core, stack: archetype.stack.stat }, game);
+  const guide = buildGuide({ ...core, stack: archetype.stack.stat, priority: priorityStats(req, game) }, game);
   const draft = toDraft(core);
 
   return {
