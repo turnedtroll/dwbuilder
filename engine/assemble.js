@@ -105,6 +105,9 @@ function reduceTowardFloor(pre, floor, stackStat, ceiling) {
 // 1. the stack stat up to min(stack.modal, 100)
 // 2. every other stat with target[s] > 0, proportionally toward target[s] (capped at target[s] and 100)
 // 3. the stack stat up toward 100
+// "Proportionally" is implemented as a deterministic greedy unit-step: each iteration adds one point
+// to whichever eligible stat currently has the largest remaining gap to its cap. Over many iterations
+// this converges to (and never overshoots) a proportional split of the deficit across the gaps.
 // Pure: returns a new object, never mutates `pre`.
 function raiseTowardBudget(pre, budget, target, stack) {
   const out = { ...pre };
@@ -161,6 +164,10 @@ export function fitPreToBudget(pre, budget, floor, target, stack) {
 }
 
 // §Step 8: fit `target` to exactly 330 points. Pure: returns a new object, never mutates inputs.
+// Returns { final, raised } — `raised` lists every stat pushed up under ruling rules 1-2 (phases B/C
+// below), as {stat, from, to, phase}, so callers can build notes from what actually happened instead
+// of re-deriving it from p75 (a stat can be raised under rule 1/2 without ever crossing its own p75 —
+// e.g. a phase-C base stat introduced from 0 that only needed a few points before 330 was reached).
 export function fitTo330(target, floor, priority, spread, stackStat) {
   const out = { ...target };
   const isPriority = s => priority.has(s);
@@ -203,35 +210,43 @@ export function fitTo330(target, floor, priority, spread, stackStat) {
     pts = pointsSpent(out);
   }
 
-  // Phase B: every target > 0 stat is at (or past) its p75 but still short of 330 — the archetype's
-  // per-stat modal data is too sparse (dump stats vary too much to have a mode). Keep raising the
-  // stats the archetype actually invests in, beyond p75 toward 100, largest p75 first (ties: ALL_STATS order).
+  const raised = [];
+
+  // Phase B (ruling rule 1): every target > 0 stat is at (or past) its p75 but still short of 330 —
+  // the archetype's per-stat modal data is too sparse (dump stats vary too much to have a mode). Keep
+  // raising the stats the archetype actually invests in, beyond p75 toward 100, largest p75 first
+  // (ties: ALL_STATS order).
   if (pts < 330) {
     const order = ALL_STATS
       .map((s, i) => ({ s, i, p75: spread?.[s]?.p75 ?? 0 }))
       .filter(x => out[x.s] > 0)
       .sort((a, b) => b.p75 - a.p75 || a.i - b.i);
     for (const { s } of order) {
+      const from = out[s];
       while (pts < 330 && out[s] < 100) { out[s] += 1; pts = pointsSpent(out); }
+      if (out[s] > from) raised.push({ stat: s, from, to: out[s], phase: 1 });
       if (pts >= 330) break;
     }
   }
 
-  // Phase C: still short with every invested stat at 100 — spill into untouched BASE_STATS
-  // (never an attunement or weapon stat: that would change the build's identity), largest p75 first.
+  // Phase C (ruling rule 2): still short with every invested stat at 100 — spill into untouched
+  // BASE_STATS (never an attunement or weapon stat: that would change the build's identity), largest
+  // p75 first.
   if (pts < 330) {
     const order = BASE_STATS
       .map((s, i) => ({ s, i, p75: spread?.[s]?.p75 ?? 0 }))
       .filter(x => out[x.s] === 0)
       .sort((a, b) => b.p75 - a.p75 || a.i - b.i);
     for (const { s } of order) {
+      const from = out[s];
       while (pts < 330 && out[s] < 100) { out[s] += 1; pts = pointsSpent(out); }
+      if (out[s] > from) raised.push({ stat: s, from, to: out[s], phase: 2 });
       if (pts >= 330) break;
     }
   }
 
   if (pts < 330) throw new Error(`cannot fit to 330 points: stuck at ${pts} even after using every base stat`);
-  return out;
+  return { final: out, raised };
 }
 
 function applyReqs(reqs, target, mustMin) {
@@ -345,19 +360,18 @@ export function planStats(req, archetype, game) {
     floor330[s] = Math.max(0, shrineBase?.[s] ?? 0, bonus[s] ?? 0, mustMin[s] ?? 0, stackFloor);
   }
 
-  let final;
+  let fit;
   try {
-    final = fitTo330(target, floor330, priority, a.post_shrine_spread, a.stack.stat);
+    fit = fitTo330(target, floor330, priority, a.post_shrine_spread, a.stack.stat);
   } catch (e) {
     throw new Error(`${a.id}: ${e.message}`);
   }
+  const final = fit.final;
 
-  // fitTo330 may have raised stats beyond their own p75 (or off of 0) to close a gap the archetype's
-  // sparse per-stat modal data left in the 330-point budget; record those adaptations.
-  for (const s of ALL_STATS) {
-    const p75 = a.post_shrine_spread?.[s]?.p75 ?? 0;
-    if (final[s] > Math.max(target[s] ?? 0, p75)) notes.push(`${s} raised to ${final[s]} to reach 330`);
-  }
+  // fitTo330 reports exactly which stats it raised under ruling rules 1-2 (beyond p75, or off of 0)
+  // to close a gap the archetype's sparse per-stat modal data left in the 330-point budget; record
+  // every one, regardless of whether the resulting value happens to cross that stat's own p75.
+  for (const r of fit.raised) notes.push(`${r.stat} raised to ${r.to} to reach 330`);
 
   return { preShrine: pre, shrinePower, shrineBase, final, race, multifaceted, notes };
 }

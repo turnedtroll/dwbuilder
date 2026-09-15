@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { normalizeRequest, selectArchetype, planStats } from "../engine/assemble.js";
-import { pointsSpent, ATTUNEMENTS, WEAPON_STATS } from "../engine/stats.js";
+import { normalizeRequest, selectArchetype, planStats, fitTo330 } from "../engine/assemble.js";
+import { pointsSpent, zeroFlat, ATTUNEMENTS, WEAPON_STATS } from "../engine/stats.js";
 import { shrineOfOrder } from "../engine/shrine.js";
 const game = JSON.parse(readFileSync(new URL("../data/game.json", import.meta.url)));
 const A = JSON.parse(readFileSync(new URL("../data/archetypes.json", import.meta.url))).archetypes;
@@ -36,4 +36,34 @@ test("weapon none zeroes weapon stats; include adds attunement", () => {
   for (const w of WEAPON_STATS) assert.equal(p.final[w], 0);
   assert.ok(p.final.Thundercall >= 20);
   assert.equal(pointsSpent(p.final), 330);
+});
+
+test("fitTo330 records every raise, even ones that land below the stat's own p75", () => {
+  // Only Strength is invested (already at 100, its own p75); everything else starts at 0.
+  // Phase B has nothing left to raise (Strength is already capped), so phase C spills into the
+  // untouched BASE_STATS by descending p75: Fortitude and Agility fill all the way to 100, and the
+  // remaining deficit lands Intelligence at 30 — short of its own p75 of 65. That raise must still
+  // be reported.
+  const target = zeroFlat();
+  target.Strength = 100;
+  const floor = zeroFlat();
+  const priority = new Set(["Strength"]);
+  const spread = Object.fromEntries(Object.keys(zeroFlat()).map(s => [s, { p25: 0, p50: 0, p75: 0 }]));
+  spread.Strength.p75 = 100;
+  spread.Fortitude.p75 = 100;
+  spread.Agility.p75 = 100;
+  spread.Intelligence.p75 = 65;
+  spread.Willpower.p75 = 50;
+  spread.Charisma.p75 = 10;
+
+  const { final, raised } = fitTo330(target, floor, priority, spread, "Strength");
+  assert.equal(pointsSpent(final), 330);
+  assert.equal(final.Intelligence, 30);
+
+  const touched = raised.find(r => r.stat === "Intelligence");
+  assert.ok(touched, "Intelligence's 0 -> 30 raise should be recorded even though 30 < its p75 of 65");
+
+  for (const s of Object.keys(final)) {
+    if (final[s] > (target[s] ?? 0)) assert.ok(raised.some(r => r.stat === s), `${s} raised but missing from the raised list`);
+  }
 });
