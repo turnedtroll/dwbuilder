@@ -55,6 +55,19 @@ test("mantra slots: base + oath", () => {
   assert.equal(mantraUsage(healer, game).overflow, 2);
 });
 
+test("talent_weapon_type: Shield-requiring talent with no weapon is a hard error; with a matching Shield weapon it isn't", () => {
+  const noWeapon = structuredClone(healer);
+  noWeapon.talents.push("Knight's Rally");
+  const rNoWeapon = validate(noWeapon, game);
+  assert.ok(rNoWeapon.errors.some(e => e.code === "talent_weapon_type" && e.msg.includes("Knight's Rally")), JSON.stringify(rNoWeapon.errors));
+
+  const withShield = structuredClone(healer);
+  withShield.talents.push("Knight's Rally");
+  withShield.weapon = "Kite Shield"; // no reqs; healer's Fortitude 80 / Willpower 40 already meet Knight's Rally's own reqs
+  const rWithShield = validate(withShield, game);
+  assert.ok(!rWithShield.errors.some(e => e.code === "talent_weapon_type"), JSON.stringify(rWithShield.errors));
+});
+
 test("resolveTalent strips variant suffix and ignores case", () => {
   assert.equal(resolveTalent("Wyvern's Claw [LHT]", game), "Wyvern's Claw");
   assert.equal(resolveTalent("To the Finish", game), "To The Finish");
@@ -66,7 +79,10 @@ test("top 30 corpus builds by views validate with (almost) zero hard errors", ()
   // stored pointSpent is stale for ~8% of the feed; require our own formula to agree so we test the validator, not the feed
   const top = feeds.filter(b => b.stats.pointSpent === 330 && b.talents.length && pointsSpent(fromFeedBuild(b).final) === 330)
     .sort((a, b) => b.meta.views - a.meta.views).slice(0, 30);
-  const SOFT = ["warder_cap", "mantra_slots", "unknown_talent", "unknown_mantra", "weapon_reqs", "outfit_reqs"];
+  // talent_weapon_type: real players keep Shield-only talents (Turtle Shell, Knight's Rally, ...) while
+  // wielding an unrelated weapon at a nontrivial rate in this corpus (5 of the top 16 unique builds here) -
+  // corpus noise like the other SOFT codes, not a validator gap (see the real-builder-verified rule in validate.js).
+  const SOFT = ["warder_cap", "mantra_slots", "unknown_talent", "unknown_mantra", "weapon_reqs", "outfit_reqs", "talent_weapon_type"];
   const bad = [], unresolved = new Set(), unknownMantras = new Set();
   for (const b of top) {
     const r = validate(fromFeedBuild(b), game);

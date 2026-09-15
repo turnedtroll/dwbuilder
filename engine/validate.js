@@ -38,6 +38,23 @@ function phaseOk(reqs, core) {
   return phases.some(f => meetsStats(f, reqs));
 }
 
+// The builder treats a talent's weaponType as a hard requirement (equipped weapon's type, or
+// wtype for the "Light/Medium/Heavy Weapon" class entries, must be in the comma-separated list;
+// no weapon at all -> never obtainable). "Fists" is the only vocabulary mismatch against
+// weapons[*].type ("Fist"), normalised below.
+export function weaponTypeOk(talent, core, game) {
+  if (!talent.weaponType) return true;
+  const w = game.weapons[core.weapon];
+  if (!w) return false;
+  return talent.weaponType.split(", ").some(want => {
+    if (want === "Light Weapon") return w.wtype === "light";
+    if (want === "Medium Weapon") return w.wtype === "medium";
+    if (want === "Heavy Weapon") return w.wtype === "heavy";
+    if (want === "Fists") return w.type === "Fist";
+    return w.type === want;
+  });
+}
+
 export function talentObtainable(name, core, game) {
   const resolved = resolveTalent(name, game);
   const t = resolved ? game.talents[resolved] : null;
@@ -53,6 +70,7 @@ export function talentObtainable(name, core, game) {
   }
   if (t.aspect && t.aspect !== core.race) why.push(`needs race ${t.aspect}`);
   if (t.rarity === "Oath" && t.category !== core.oath) why.push(`needs oath ${t.category}`);
+  if (!weaponTypeOk(t, core, game)) why.push(`needs weapon type ${t.weaponType}`);
   return { ok: why.length === 0, why };
 }
 
@@ -111,9 +129,11 @@ export function validate(core, game) {
     const g = game.talents[resolved];
     if (g.category === WARDER_CATEGORY && resolved !== "Justicar's Gift") warders++;
     const r = talentObtainable(t, core, game);
-    if (!r.ok) err("talent_reqs", `${t}: ${r.why.join("; ")}`);
+    const weaponWhy = r.why.filter(w => w.startsWith("needs weapon type"));
+    const otherWhy = r.why.filter(w => !w.startsWith("needs weapon type"));
+    if (otherWhy.length) err("talent_reqs", `${t}: ${otherWhy.join("; ")}`);
+    if (weaponWhy.length) err("talent_weapon_type", `${t}: ${weaponWhy.join("; ")}`);
     if (g.outfit && g.outfit !== core.outfit) warn("talent_soft", `${t} wants outfit ${g.outfit}`);
-    if (g.weaponType && !core.weapon) warn("talent_soft", `${t} needs a ${g.weaponType}`);
     for (const m of g.mantras ?? []) if (!core.mantras.includes(m)) warn("talent_soft", `${t} wants mantra ${m}`);
     for (const x of g.exclusive ?? []) if (seenResolved.has(x)) err("exclusive", `${t} excludes ${x}`);
     seenResolved.add(resolved);
