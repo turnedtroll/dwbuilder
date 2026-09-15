@@ -53,11 +53,14 @@ def freq(counter, n, denom):
 def role_of(b, final, talents, oath):
     ts, ms = set(talents), set(b["mantras"])
     healer_sig = ({"Graceful Flame", "Command: Live", "Symbiotic Sustain", "Alsin's Aid"} & ms) or ({"Undying Flame", "Justicar's Mark", "Kindness", "Grand Support"} & ts)
+    # Precedence: healer -> dps -> mage -> tank -> hybrid. Tank runs after dps/mage because
+    # Fortitude >= 75 / Reinforced Armor / Moving Fortress is baseline survivability present
+    # across most of the corpus, not a distinguishing signal; it's a fallback before hybrid.
     if oath == "Linkstrider" or (healer_sig and (final["Charisma"] >= 50 or (final["Flamecharm"] >= 40 and final["Willpower"] >= 40))): return "healer"
     wmax = max(final[w] for w in WEAPON); amax = max(final[a] for a in ATT)
-    if final["Fortitude"] >= 75 or ({"Reinforced Armor", "Moving Fortress"} & ts): return "tank"
     if wmax >= 65 and wmax >= amax: return "dps"
     if amax >= 65 and wmax < 65: return "mage"
+    if final["Fortitude"] >= 75 or ({"Reinforced Armor", "Moving Fortress"} & ts): return "tank"
     return "hybrid"
 
 def load():
