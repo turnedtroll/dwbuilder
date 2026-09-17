@@ -86,8 +86,10 @@ top of the script) and do not count.
 
 ## How a build is made
 
-1. `selectArchetype` scores the 115 archetypes against the request (role, attunements,
-   weapon type, oath, origin, race).
+1. `selectArchetype` scores the archetypes against the request (role, attunements, weapon
+   type, oath, origin, race). Roles: DPS, healer, tank, mage, hybrid (from the build's stat
+   shape and kit), **boss raid** (Fortitude ≥ 50, a damage stat ≥ 65 and a healing mantra or
+   talent — the self-sufficient hybrid), and **Chime** (builds their authors tagged `pvp: chime`).
 2. `planStats` fits the archetype medoid's stat block to 330 points around the request's
    must-have requirements, planning the pre-shrine block and Shrine of Order at the
    archetype's typical power.

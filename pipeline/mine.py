@@ -70,8 +70,18 @@ def load():
             for b in json.load(fh): seen[b["id"]] = b
     return list(seen.values())
 
-INTENT_TAGS = {"pve: boss": "bossraid", "pvp: chime": "chime"}
-INTENT_ROLES = ("bossraid", "chime")
+# Chime (of Conflict) builds are an intent players tag themselves. Boss raid is Deepwoken slang for
+# a self-sufficient hybrid - good health, good damage AND healing - so it is a stat/kit signature.
+INTENT_TAGS = {"pvp: chime": "chime"}
+INTENT_ROLES = ("chime",)
+HEAL_MANTRAS = {"Graceful Flame", "Command: Live", "Symbiotic Sustain", "Alsin's Aid", "Rally", "Parasitic Leech", "Shade Devour"}
+HEAL_TALENTS = {"Undying Flame", "Justicar's Mark", "Kindness", "Grand Support", "Lord's Tithe", "Phoenix Flames", "Blood Bank", "Saint Jay"}
+
+def is_bossraid(x, resolve):
+    f = x["final"]
+    dmg = max(max(f[w] for w in WEAPON), max(f[a] for a in ATT))
+    heals = bool(set(x["mantras"]) & HEAL_MANTRAS) or bool(set(filter(None, map(resolve, x["talents"]))) & HEAL_TALENTS)
+    return f["Fortitude"] >= 50 and dmg >= 65 and heals
 ROLE_LABEL = {"dps": "DPS", "bossraid": "Boss raid", "chime": "Chime"}
 
 def intent_of(b):
@@ -195,7 +205,7 @@ def main():
     for x in kept: x["role"] = role_of({"mantras": x["mantras"]}, x["final"], x["talents"], x["oath"])
     # Intent roles from the authors' own tags: a "pve: boss" build also joins the bossraid clusters,
     # a "pvp: chime" build the chime clusters (on top of its stat-shape role above).
-    kept += [dict(x, role=r) for x in kept for r in INTENT_ROLES if r in x["intent"]]
+    kept += [dict(x, role=r) for x in kept for r in INTENT_ROLES if r in x["intent"]] + [dict(x, role="bossraid") for x in kept if is_bossraid(x, resolve)]
     groups = cluster(kept)
     arch = sorted((summarize(k, v, game, resolve) for k, v in groups.items()), key=lambda a: -a["views_total"])
     seen_ids = Counter()
