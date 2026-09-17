@@ -127,6 +127,66 @@ test("Jus Karita: nested origin requirement (data/raw's or[1].or[0].origin) is h
   assert.ok(rJusticar.ok, JSON.stringify(rJusticar));
 });
 
+// A bare 330-point core with no shrine, for tests that need full control over the stat block.
+function bareCore(final, talents, extra = {}) {
+  const c = structuredClone(healer);
+  for (const k of Object.keys(c.final)) c.final[k] = 0;
+  Object.assign(c.final, final);
+  c.preShrine = null; c.shrine = false;
+  c.race = "None"; c.oath = "None"; c.weapon = ""; c.outfit = "None"; c.equipment = {};
+  c.talents = talents; c.mantras = [];
+  return Object.assign(c, extra);
+}
+
+test("prerequisite chain must be satisfiable in one phase (builder: pre-shrine talents cannot lean on post-shrine prereqs)", () => {
+  // Live sweep, dps-heavy-jetstriker-2: Magical Resolve (Willpower 40 + Battle Tendency) with pre-shrine
+  // Willpower 40 / Fortitude 1 and post-shrine Willpower 30 / Fortitude 90. Magical Resolve is only met
+  // pre-shrine, but Battle Tendency (Fortitude 15) is only met post-shrine - the builder evaluates the
+  // whole chain per phase (post may fall back to pre for prereqs, pre may not) and says
+  // "Requirements no longer satisfied".
+  const c = structuredClone(healer);
+  c.preShrine.Willpower = 40; c.preShrine.Fortitude = 1;
+  c.final.Willpower = 30; c.final.Agility += 10; // keep 330
+  c.talents.push("Battle Tendency", "Magical Resolve");
+  const r = validate(c, game);
+  assert.ok(r.errors.some(e => e.code === "talent_reqs" && e.msg.startsWith("Magical Resolve")), JSON.stringify(r.errors));
+
+  const ok = structuredClone(c); ok.preShrine.Fortitude = 15; // chain now holds pre-shrine
+  assert.ok(!validate(ok, game).errors.some(e => e.msg.startsWith("Magical Resolve")), JSON.stringify(validate(ok, game).errors));
+});
+
+test("`or` alternatives are mandatory on top of the top-level requirements (builder semantics)", () => {
+  // Live sweep, dps-medium-irons-bladeharper: Potion Quaffer = Intelligence 30 AND (Fortitude 15 OR
+  // Willpower 15). We used to treat the top-level block as a free-standing alternative, so Int 30 alone passed.
+  const bad = bareCore({ Intelligence: 100, Charisma: 100, Strength: 100, Agility: 30 }, ["Potion Quaffer"]);
+  const r = validate(bad, game);
+  assert.ok(r.errors.some(e => e.code === "talent_reqs" && e.msg.startsWith("Potion Quaffer")), JSON.stringify(r.errors));
+
+  const good = bareCore({ Intelligence: 100, Charisma: 100, Strength: 100, Agility: 15, Willpower: 15 }, ["Potion Quaffer"]);
+  assert.ok(!validate(good, game).errors.some(e => e.msg.startsWith("Potion Quaffer")), JSON.stringify(validate(good, game).errors));
+});
+
+test("attunement tier talents (Adept/Expert/Master X, X Unbounded) follow FINAL attunement stats and are auto-granted", () => {
+  // Live sweep, dps-light-bladeharper: the builder removed Master/Expert Ironsinger on load (final Ironsing
+  // below their reqs; the pre-shrine value doesn't count for these) and then flagged
+  // "Rending Needle: Impaler: Requires talent: Master Ironsinger".
+  const listed = bareCore({ Ironsing: 40, Intelligence: 100, Charisma: 100, Strength: 90 }, ["Master Ironsinger"],
+    { shrine: true, preShrine: { ...structuredClone(healer).final, Ironsing: 75 } });
+  const r = validate(listed, game);
+  assert.ok(r.warnings.some(e => e.code === "talent_auto_tier" && e.msg.startsWith("Master Ironsinger")), JSON.stringify(r.warnings));
+  assert.ok(!r.errors.some(e => e.msg.startsWith("Master Ironsinger")), JSON.stringify(r.errors)); // the builder only drops it silently
+
+  const dependent = bareCore({ Ironsing: 40, Intelligence: 100, Charisma: 100, Strength: 90 }, ["Master Ironsinger", "Rending Needle: Impaler"],
+    { shrine: true, preShrine: { ...structuredClone(healer).final, Ironsing: 75 } });
+  const r2 = validate(dependent, game);
+  assert.ok(r2.errors.some(e => e.code === "talent_reqs" && e.msg.startsWith("Rending Needle: Impaler")), JSON.stringify(r2.errors));
+
+  // Qualifying tier talents count as had even when not listed - the builder adds them itself.
+  const granted = bareCore({ Ironsing: 75, Intelligence: 100, Charisma: 100, Strength: 55 }, ["Rending Needle: Impaler"]);
+  assert.ok(talentObtainable("Rending Needle: Impaler", granted, game).ok, JSON.stringify(talentObtainable("Rending Needle: Impaler", granted, game)));
+  assert.deepEqual(validate(granted, game).errors.filter(e => e.msg.includes("Rending Needle")), []);
+});
+
 test("resolveTalent strips variant suffix and ignores case", () => {
   assert.equal(resolveTalent("Wyvern's Claw [LHT]", game), "Wyvern's Claw");
   assert.equal(resolveTalent("To the Finish", game), "To The Finish");

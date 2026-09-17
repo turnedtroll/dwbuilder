@@ -55,50 +55,120 @@ export function weaponTypeOk(talent, core, game) {
   });
 }
 
-export function talentObtainable(name, core, game) {
+// Attunement tier talents ("Adept/Expert/Master <X>", "<X> Unbounded", and the bare
+// "Flamecharmer"/"Ironsinger"/... entries) are not picked in the builder - it adds and removes
+// them itself from the FINAL attunement stats alone (pre-shrine values don't count, unlike
+// every other talent). Mirrors the builder's Tb(): name pattern + attunement req + doesn't
+// count toward the talent total.
+const TIER_NAME = /^(Adept |Expert |Master )| Unbounded$/;
+const TIER_BASE = new Set(["Flamecharmer", "Frostdrawer", "Thundercaller", "Galebreather", "Shadowcaster", "Ironsinger", "Bloodrender"]);
+export function isAutoTier(name, game) {
+  const t = game.talents[name];
+  if (!t || t.counts) return false;
+  if (!(TIER_NAME.test(name) || TIER_BASE.has(name))) return false;
+  return Object.keys(t.reqs ?? {}).some(k => ATTUNEMENTS.includes(canon(k) ?? k));
+}
+export function autoTierGranted(name, core, game) {
+  const t = game.talents[name];
+  return Object.entries(t.reqs ?? {}).every(([k, v]) => {
+    const s = canon(k) ?? k;
+    return ATTUNEMENTS.includes(s) && (core.final[s] ?? 0) >= Number(v);
+  });
+}
+
+const tierCache = new WeakMap(); // keyed by core.final, which pickers never mutate mid-pick
+function grantedTierTalents(core, game) {
+  let set = tierCache.get(core.final);
+  if (!set) {
+    set = new Set();
+    for (const n of Object.keys(game.talents)) if (isAutoTier(n, game) && autoTierGranted(n, core, game)) set.add(n);
+    tierCache.set(core.final, set);
+  }
+  return set;
+}
+
+// Everything the build "has" for prerequisite purposes: listed talents (tier talents only if the
+// final stats actually grant them - the builder drops the rest on load), gear-granted talents,
+// auto-granted tier talents, and the build's own Oath:/Murmur: path entries (Oath: Contractor
+// lists itself as a prerequisite).
+export function haveTalents(core, game) {
+  const have = new Set();
+  for (const x of core.talents) {
+    const r = resolveTalent(x, game) ?? x;
+    if (!isAutoTier(r, game)) have.add(r);
+  }
+  for (const g of grantedTalents(core, game)) have.add(g);
+  for (const g of grantedTierTalents(core, game)) have.add(g);
+  have.add(`Oath: ${core.oath}`); have.add(`Murmur: ${core.murmur}`);
+  return have;
+}
+
+// Requirement semantics, mirroring the builder's evaluator (tr()/Jw() in its bundle):
+//  - a requirement block is stats AND prerequisite talents AND origin AND weaponType AND, when an
+//    `or` list exists, at least one alternative block (evaluated with the same rules). The
+//    top-level block is NOT itself an alternative: Potion Quaffer = Int 30 AND (Fort 15 OR Will 15).
+//  - a talent is obtainable if the whole block holds against the post-shrine stats, where a
+//    prerequisite may instead have been obtained pre-shrine; or if the whole block (prerequisites
+//    included, no fallback) holds against the pre-shrine stats. Magical Resolve (Will 40 + Battle
+//    Tendency) with pre Will 40 / Fort 1 and post Will 30 / Fort 90 is obtainable in neither.
+//  - tier talents are granted purely from the final attunement stats (see isAutoTier).
+function evalBlock(block, phase, core, game, have, stack) {
+  const stats = phase === "pre" ? core.preShrine : core.final;
+  if (!meetsStats(stats, block.reqs ?? {})) return false;
+  if (!weaponTypeOk({ weaponType: block.weaponType }, core, game)) return false;
+  if (block.origin && block.origin !== core.origin) return false;
+  for (const p of block.pre ?? []) {
+    if (!have.has(p)) return false;
+    if (!prereqObtainable(p, phase, core, game, have, stack)) return false;
+  }
+  if (block.or?.length && !block.or.some(a => evalBlock(a, phase, core, game, have, stack))) return false;
+  return true;
+}
+function prereqObtainable(p, phase, core, game, have, stack) {
+  if (isPath(p) || !game.talents[p] || stack.has(p)) return true; // own oath/murmur; unknown name; cycle
+  stack.add(p);
+  const ok = obtainableIn(p, phase, core, game, have, stack) ||
+    (phase === "post" && hasPreShrine(core) && obtainableIn(p, "pre", core, game, have, stack));
+  stack.delete(p);
+  return ok;
+}
+function obtainableIn(name, phase, core, game, have, stack) {
+  if (isAutoTier(name, game)) return autoTierGranted(name, core, game);
+  return evalBlock(game.talents[name], phase, core, game, have, stack);
+}
+const hasPreShrine = core => !!(core.shrine && core.preShrine);
+
+export function talentObtainable(name, core, game, _depth = 0) {
   const resolved = resolveTalent(name, game);
   const t = resolved ? game.talents[resolved] : null;
-  if (!t) return { ok: false, why: ["unknown"] };
-  // Path entries ("Oath: X" / "Murmur: X") are never in core.talents (they're not pickable
-  // mantras/talents in the usual sense), but Oath: Contractor lists itself as a prerequisite -
-  // treat the build's own oath/murmur as "had" so that self-reference resolves instead of
-  // permanently failing.
-  const have = new Set([...core.talents.map(x => resolveTalent(x, game) ?? x), ...grantedTalents(core, game), `Oath: ${core.oath}`, `Murmur: ${core.murmur}`]);
-  const why = [];
-  // Most weaponType requirements are a single blanket field (t.weaponType) that applies no matter
-  // which `or` alternative is used. One talent (Armor Piercing: Greatcannon/Pistol/Rifle) instead
-  // carries a *different* weaponType per alternative and no blanket one - so weaponType is checked
-  // per-alt here (falling back to the blanket t.weaponType when an alt doesn't specify its own),
-  // not as a separate unconditional check.
-  const or = t.or ?? [];
-  // The top-level fields are themselves a genuine, independent alternative (see Execution: Light
-  // Weapon 90 + Pistol is one of 3 equally-valid paths) UNLESS they contribute nothing that
-  // distinguishes them from the `or` list, in which case including them would silently create an
-  // unintended free pass: either the top level is completely empty (Jus Karita - the whole
-  // requirement lives in `or`, there is no talent-wide default), or every `or` alternative carries
-  // its own weaponType while the top level has none (Armor Piercing - the top-level reqs merge into
-  // every alternative already via slimdata.py's or_block, so keeping a weaponType-free "primary"
-  // around would wrongly accept any weapon type).
-  const primaryEmpty = !Object.keys(t.reqs ?? {}).length && !(t.pre ?? []).length && !t.origin && !t.outfit;
-  const primaryUnconstrainedWeapon = !t.weaponType && or.some(a => a.weaponType);
-  const skipPrimary = or.length > 0 && (primaryEmpty || primaryUnconstrainedWeapon);
-  const alt = skipPrimary ? [...or] : [{ reqs: t.reqs, pre: t.pre, origin: t.origin, outfit: t.outfit, alt: t.alt, weaponType: t.weaponType }, ...or];
-  const altWeaponOk = a => weaponTypeOk({ weaponType: a.weaponType ?? t.weaponType }, core, game);
-  const anyAlt = alt.some(a => phaseOk(a.reqs ?? {}, core) && altWeaponOk(a) && (a.alt || ((a.pre ?? []).every(p => have.has(p)) && (!a.origin || a.origin === core.origin))));
+  if (!t) return { ok: false, why: ["unknown talent"] };
+  const have = haveTalents(core, game);
+  const anyAlt = obtainableIn(resolved, "post", core, game, have, new Set()) ||
+    (hasPreShrine(core) && obtainableIn(resolved, "pre", core, game, have, new Set()));
   const raceOk = !t.aspect || t.aspect === core.race;
   const oathOk = t.rarity !== "Oath" || t.category === core.oath;
+  const why = [];
   if (!anyAlt) {
-    // Best-effort diagnostic text from the top-level fields; when skipPrimary is true (the real
-    // requirement lives entirely in `or`, e.g. Jus Karita's per-alt origin) these are uninformative,
-    // so `ok` below is derived from anyAlt directly rather than from why.length - a talent must never
-    // read as obtainable just because we couldn't articulate which alternative it failed.
-    if (Object.keys(t.reqs ?? {}).length && !phaseOk(t.reqs, core)) why.push(`needs ${Object.entries(t.reqs).map(([k, v]) => `${k} ${v}`).join(", ")}`);
-    for (const p of t.pre ?? []) if (!have.has(p)) why.push(`needs talent ${p}`);
-    if (t.origin && t.origin !== core.origin) why.push(`needs origin ${t.origin}`);
-    if (!alt.some(altWeaponOk)) {
-      const wanted = [...new Set(alt.map(a => a.weaponType ?? t.weaponType).filter(Boolean))];
-      if (wanted.length) why.push(`needs weapon type ${wanted.join(" or ")}`);
+    // Best-effort diagnostics; `ok` is derived from anyAlt, never from why. Weapon-type reasons keep
+    // the words "needs weapon type" so validate() can file them under talent_weapon_type.
+    const fmt = reqs => Object.entries(reqs ?? {}).map(([k, v]) => `${k} ${v}`).join(", ");
+    if (isAutoTier(resolved, game)) why.push(`auto-granted only at final ${fmt(t.reqs)}`);
+    else if (Object.keys(t.reqs ?? {}).length && !phaseOk(t.reqs, core)) why.push(`needs ${fmt(t.reqs)}`);
+    for (const p of t.pre ?? []) {
+      if (!have.has(p)) { why.push(`needs talent ${p}`); continue; }
+      const preOk = prereqObtainable(p, "post", core, game, have, new Set()) || (hasPreShrine(core) && prereqObtainable(p, "pre", core, game, have, new Set()));
+      if (!preOk) {
+        // Same phrasing as the builder ("Turtle Shell: Knight's Rally: Requires Weapon Type: Shield").
+        const sub = _depth < 3 && game.talents[p] ? talentObtainable(p, core, game, _depth + 1).why : ["requirements not met"];
+        why.push(`${p}: ${sub.join("; ")}`);
+      }
     }
+    if (t.origin && t.origin !== core.origin) why.push(`needs origin ${t.origin}`);
+    const wtBlocks = [t, ...(t.or ?? [])].filter(b => b.weaponType);
+    if (wtBlocks.length && !wtBlocks.some(b => weaponTypeOk({ weaponType: b.weaponType }, core, game))) {
+      why.push(`needs weapon type ${[...new Set(wtBlocks.map(b => b.weaponType))].join(" or ")}`);
+    }
+    if (t.or?.length && !why.length) why.push(`needs one of ${t.or.map(a => fmt(a.reqs) || a.origin || a.weaponType || "?").join(" / ")}`);
     if (!why.length) why.push("requirements not met");
   }
   if (!raceOk) why.push(`needs race ${t.aspect}`);
@@ -169,9 +239,18 @@ export function validate(core, game) {
     if (!resolved) { err("unknown_talent", t); continue; }
     const g = game.talents[resolved];
     if (g.category === WARDER_CATEGORY && resolved !== "Justicar's Gift") warders++;
+    if (isAutoTier(resolved, game)) {
+      // The builder owns these: it removes a listed tier talent whose final attunement is short
+      // (and everything that depended on it then fails), and adds qualifying ones by itself.
+      // Listing one the final stats don't grant is harmless to the builder (it silently drops it,
+      // and published builds do this constantly) - warn, and let dependents fail via haveTalents.
+      if (!autoTierGranted(resolved, core, game)) warn("talent_auto_tier", `${t}: auto-granted only at final ${Object.entries(g.reqs).map(([k, v]) => `${k} ${v}`).join(", ")}; the builder removes it`);
+      seenResolved.add(resolved);
+      continue;
+    }
     const r = talentObtainable(t, core, game);
-    const weaponWhy = r.why.filter(w => w.startsWith("needs weapon type"));
-    const otherWhy = r.why.filter(w => !w.startsWith("needs weapon type"));
+    const weaponWhy = r.why.filter(w => w.includes("needs weapon type"));
+    const otherWhy = r.why.filter(w => !w.includes("needs weapon type"));
     if (otherWhy.length) err("talent_reqs", `${t}: ${otherWhy.join("; ")}`);
     if (weaponWhy.length) err("talent_weapon_type", `${t}: ${weaponWhy.join("; ")}`);
     if (g.outfit && g.outfit !== core.outfit) warn("talent_soft", `${t} wants outfit ${g.outfit}`);
