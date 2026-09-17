@@ -75,6 +75,7 @@ class Mine(unittest.TestCase):
                 self.assertIn(slot, ("Head", "Arms", "Legs", "Torso", "Face", "Earrings", "Rings"), x["id"])
                 self.assertTrue(sig["stars"] in (2, 3) and 1 <= len(sig["pips"]) <= 6, (x["id"], slot, sig))
                 for stat, rarity in sig["pips"]: self.assertIn(stat, PIPS, (x["id"], slot, stat))
+                if len(sig["pips"]) >= 3: self.assertGreater(len({st for st, _ in sig["pips"]}), 1, (x["id"], slot, "all pips in one stat"))
             self.assertIn(x["weapon_stars"]["mod"], ("DMG%", "PEN%"), x["id"])
             self.assertEqual(x["weapon_stars"]["count"], 3, x["id"])
             if x["weapons"]: self.assertTrue(x["enchants"] and x["enchants"][0][0], x["id"])

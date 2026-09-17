@@ -103,6 +103,7 @@ test("gear carries real stars and pips; weapons carry stars (DMG%/PEN%) and an e
       assert.ok([2, 3].includes(it.qualityStars), `${a.id}: ${it.name} stars ${it.qualityStars}`);
       assert.ok(it.pips.length >= 1, `${a.id}: ${it.name} has no pips`);
       for (const p of it.pips) assert.ok(PIPS.has(p.stat) && p.rarity, `${a.id}: ${it.name} pip ${JSON.stringify(p)}`);
+      if (it.pips.length >= 3) assert.ok(new Set(it.pips.map(p => p.stat)).size > 1, `${a.id}: ${it.name} has every pip in ${it.pips[0].stat} (builder warns)`);
     }
     if (b.weapon) {
       assert.ok(["DMG%", "PEN%"].includes(b.weaponStars?.mod) && b.weaponStars.count === 3, `${a.id}: weaponStars ${JSON.stringify(b.weaponStars)}`);

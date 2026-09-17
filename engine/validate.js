@@ -340,6 +340,13 @@ export function validate(core, game) {
     if (!o) err("unknown_outfit", core.outfit);
     else { if (!meetsStats(core.final, o.reqs)) err("outfit_reqs", core.outfit); if (o.origin && o.origin !== core.origin) err("outfit_reqs", `${core.outfit} needs origin ${o.origin}`); }
   }
+  // Builder rule: an item with 3+ pips all in one stat gets "put at least one pip into a different stat".
+  for (const [slot, item] of Object.entries(core.equipment ?? {})) {
+    for (const it of (Array.isArray(item) ? item : [item])) {
+      const pips = it?.pips ?? [];
+      if (it?.name && pips.length >= 3 && pips.every(p => p.stat) && pips.every(p => p.stat === pips[0].stat)) err("gear_pips", `${slot}: ${it.name}: all ${pips.length} pips in ${pips[0].stat} - put at least one into a different stat`);
+    }
+  }
   if (core.weapon) {
     const w = game.weapons[core.weapon];
     if (!w) err("unknown_weapon", core.weapon); else if (!meetsStats(core.final, w.reqs)) err("weapon_reqs", core.weapon);

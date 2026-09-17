@@ -701,8 +701,8 @@ function pickOutfit(archetype, origin, final, game) {
 // face and earrings, Health/Posture on rings ... - not bare names with empty pips.
 const DEFAULT_PIPS = {
   Head: [["Health", "Rare"], ["Health", "Rare"], ["Physical Armor", "Rare"]], Arms: [["Health", "Rare"], ["Health", "Rare"], ["Physical Armor", "Rare"]],
-  Legs: [["Health", "Rare"], ["Health", "Rare"], ["Health", "Rare"]], Torso: [["Health", "Rare"], ["Health", "Rare"], ["Health", "Rare"]],
-  Face: [["Ether", "Rare"], ["Ether", "Rare"], ["Ether", "Rare"]], Earrings: [["Ether", "Rare"], ["Ether", "Rare"], ["Ether", "Rare"]],
+  Legs: [["Health", "Rare"], ["Health", "Rare"], ["Ether", "Rare"]], Torso: [["Health", "Rare"], ["Health", "Rare"], ["Ether", "Rare"]],
+  Face: [["Ether", "Rare"], ["Ether", "Rare"], ["Sanity", "Rare"]], Earrings: [["Ether", "Rare"], ["Ether", "Rare"], ["Sanity", "Rare"]],
   Rings: [["Health", "Rare"], ["Health", "Rare"], ["Posture", "Rare"]],
 };
 function itemFor(name, slot, archetype) {

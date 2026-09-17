@@ -183,8 +183,16 @@ def summarize(key, members, game, resolve):
                 pips = tuple((p.get("stat"), p.get("rarity") or "Rare") for p in (item.get("pips") or []) if p.get("stat"))
                 if pips: sigs[(int(item.get("qualityStars") or 0), pips)] += 1
         if not sigs: continue
-        three = Counter({k: v for k, v in sigs.items() if k[0] == 3})
-        stars, pips = (three or sigs).most_common(1)[0][0]
+        # The builder warns when 3+ pips all sit in one stat ("put at least one pip into a different
+        # stat"), and published builds do it constantly - never copy such a signature.
+        mixed = lambda pips: len(pips) < 3 or len({st for st, _ in pips}) > 1
+        pool = Counter({k: v for k, v in sigs.items() if mixed(k[1])}) or sigs
+        three = Counter({k: v for k, v in pool.items() if k[0] == 3})
+        stars, pips = (three or pool).most_common(1)[0][0]
+        pips = list(pips)
+        if not mixed(pips):  # only single-stat rolls seen: move the last pip to the slot's second stat
+            second = Counter(st for (_, sig) in sigs for st, _ in sig if st != pips[0][0]).most_common(1)
+            pips[-1] = (second[0][0] if second else ("Ether" if pips[0][0] != "Ether" else "Health"), pips[-1][1])
         gear_pips[slot] = {"stars": stars or 3, "pips": [list(p) for p in pips]}
     star_mods = Counter((m["weapon_stars"] or {}).get("mod") for m in members if (m["weapon_stars"] or {}).get("mod") in ("DMG%", "PEN%"))
     weapon_stars = {"count": 3, "mod": star_mods.most_common(1)[0][0] if star_mods else GLOBAL_STAR_MOD.get(key[1], "DMG%")}
