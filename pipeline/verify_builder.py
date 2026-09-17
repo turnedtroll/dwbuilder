@@ -49,6 +49,17 @@ assert dwfill.JS_DOM_SNAPSHOT.endswith(_ANCHOR)
 JS_DOM_SNAPSHOT_WITH_ISSUES = dwfill.JS_DOM_SNAPSHOT[: -len(_ANCHOR)] + _ISSUES_LINE
 
 
+# Issue strings the live builder emits because of a defect in the builder itself, verified against
+# its bundle. They are reported (builderBugs) but do not count against `ok`.
+#  - True Ether Bullets: its weaponType is the comma list "Pistol, Rifle, Greatcannon"; the builder's
+#    evaluator checks `weaponTypeSet.has(talent.weaponType)` against the whole string without
+#    splitting it, so the talent is flagged for every build, including a Pistol wielder
+#    (dps-light-saltchemist, Repeater). The game accepts any of the three.
+KNOWN_BUILDER_BUGS = (
+    "True Ether Bullets: Requires Weapon Type: Pistol, Rifle, Greatcannon",
+)
+
+
 def log(*a, **kw):
     print(*a, file=sys.stderr, **kw)
     sys.stderr.flush()
@@ -68,50 +79,119 @@ def load_builds(path):
         yield build_id, env
 
 
+def accept_dialog(d):
+    """Accept the builder's beforeunload prompt so navigation proceeds. The
+    dialog can already be gone by the time the callback runs (the navigation
+    that raised it was aborted); Playwright then throws "No dialog is showing"
+    from inside the event loop, which must not surface as an unhandled
+    callback exception."""
+    try:
+        d.accept()
+    except Exception:
+        pass
+
+
+def goto_builder(page):
+    """page.goto with one retry: a beforeunload dialog racing the navigation
+    aborts it with net::ERR_ABORTED even though the page is fine."""
+    try:
+        return page.goto(dwfill.BUILDER_URL, wait_until="domcontentloaded", timeout=60000)
+    except Exception as e:
+        if "ERR_ABORTED" not in str(e):
+            raise
+        time.sleep(1.0)
+        return page.goto(dwfill.BUILDER_URL, wait_until="domcontentloaded", timeout=60000)
+
+
+# Game data (talents etc.) is fetched by the app after mount; the build store's own `loading`
+# flag only covers /builds/:id fetches, so wait on the gameData store explicitly.
+JS_GAME_READY = """
+() => {
+  const root = document.querySelector('#__nuxt');
+  const pinia = root && root.__vue_app__ && root.__vue_app__.config.globalProperties.$pinia;
+  if (!pinia) return false;
+  const gd = pinia._s.get('gameData'), b = pinia._s.get('build');
+  return !!(gd && b && !gd.loading && gd.talents && gd.talents.length > 0);
+}
+"""
+
+
+def fingerprint(build):
+    """What we compare to decide the store really holds OUR build. buildName alone is not
+    enough: it is the archetype label, which duplicate archetypes (foo, foo-2) share, and a
+    stale draft with the same label can be sitting in the Chrome profile from an earlier run."""
+    return {
+        "name": build["stats"]["buildName"],
+        "pre": build.get("preShrine", {}).get("base", {}),
+        "final": build.get("attributes", {}).get("base", {}),
+        "talents": sorted(build.get("talents", [])),
+    }
+
+
+def store_matches(cur, env):
+    want = fingerprint(env["build"])
+    have = fingerprint(cur)
+    # The builder appends origin/race-granted talents on load, so ours must be a subset.
+    return (have["name"] == want["name"] and have["pre"] == want["pre"] and have["final"] == want["final"]
+            and set(want["talents"]) <= set(have["talents"]))
+
+
 def set_draft_and_load(page, ctx, env, deadline_s=60):
-    """Write the draft into localStorage and (re)load the builder, mirroring
-    dwfill.main's launch sequence, then poll the pinia store until it
-    settles (or the deadline passes)."""
-    draft = {"version": 1, "build": env["build"], "phase": env.get("phase", "pre"), "baseline": ""}
-    draft_json = json.dumps(draft)
+    """Load the draft straight into the pinia store (store.restoreDraft, the same route
+    dwfill.main takes) and poll until the store holds it.
 
-    # localStorage is per-origin: a fresh page (about:blank / chrome://new-tab-page)
-    # is not on deepwoken.co yet, so setting the key now would land on the wrong
-    # origin. Prime the origin with a first navigation whenever we're not already
-    # there (R3's "writing before goto is equivalent" holds once we're on-origin).
+    Why not localStorage + reload: the builder registers window 'pagehide' -> flush, which
+    writes the CURRENT build back into the very same `_dwb.draft.v1.new` key during the
+    navigation, clobbering whatever we just wrote there. The new page then restores the
+    previous build and never "settles" (that was the source of nearly every headless->visible
+    fallback), or - if a stale draft with the same label exists in the profile - settles on the
+    WRONG build and reports its issues as ours."""
     if not page.url.startswith(dwfill.BUILDER_URL.rsplit("/", 1)[0]):
-        page.goto(dwfill.BUILDER_URL, wait_until="domcontentloaded", timeout=60000)
-
-    # Writing localStorage before goto is equivalent to dwfill's init-script
-    # approach (R3): the builder reads it on the next navigation.
-    page.evaluate(
-        """(v) => { try { localStorage.setItem(v[0], v[1]); } catch (e) {} }""",
-        [dwfill.DRAFT_KEY, draft_json],
-    )
-    resp = page.goto(dwfill.BUILDER_URL, wait_until="domcontentloaded", timeout=60000)
-    status = resp.status if resp else None
-
-    build_name = env["build"]["stats"]["buildName"]
-    state = None
+        goto_builder(page)
+    status = 200
     deadline = time.time() + deadline_s
+    while time.time() < deadline:
+        try:
+            if page.evaluate(JS_GAME_READY):
+                break
+        except Exception:
+            pass
+        time.sleep(0.5)
+    else:
+        return None, status
+
+    page.evaluate(dwfill.JS_RESTORE_DRAFT, [env["build"], env.get("phase", "pre")])
+
+    state = None
     while time.time() < deadline:
         try:
             state = page.evaluate(dwfill.JS_GET_STORE)
         except Exception:
             state = None
-        if state and not state.get("loading"):
-            cur = state.get("current") or {}
-            if cur.get("stats", {}).get("buildName") == build_name:
-                break
+        if state and not state.get("loading") and store_matches(state.get("current") or {}, env):
+            break
         time.sleep(0.5)
     return state, status
+
+
+def stable_dom_snapshot(page, tries=8, gap_s=0.5):
+    """The issue list is a computed that settles after the load-time watchers (granted
+    talents, derived points) run; read it until two consecutive reads agree."""
+    last = None
+    for _ in range(tries):
+        dom = page.evaluate(JS_DOM_SNAPSHOT_WITH_ISSUES)
+        cur = (dom.get("issueCount"), dom.get("issues"))
+        if cur == last:
+            return dom
+        last = cur
+        time.sleep(gap_s)
+    return dom
 
 
 def verify_one(page, ctx, build_id, env, headless_fallback_allowed, args):
     state, status = set_draft_and_load(page, ctx, env)
 
-    settled = state and not state.get("loading") and \
-        (state.get("current") or {}).get("stats", {}).get("buildName") == env["build"]["stats"]["buildName"]
+    settled = bool(state) and not state.get("loading") and store_matches(state.get("current") or {}, env)
 
     if (not settled) and headless_fallback_allowed:
         log(f"[verify] {build_id}: headless attempt did not settle (HTTP {status}); retrying headless=False")
@@ -130,7 +210,7 @@ def verify_one(page, ctx, build_id, env, headless_fallback_allowed, args):
     cur = state["current"]
 
     try:
-        dom = page.evaluate(JS_DOM_SNAPSHOT_WITH_ISSUES)
+        dom = stable_dom_snapshot(page)
     except Exception as e:
         log(f"[verify] {build_id}: DOM snapshot failed: {e}")
         dom = {"issueCount": 0, "issues": [], "power": None, "pointsLeft": None}
@@ -142,15 +222,18 @@ def verify_one(page, ctx, build_id, env, headless_fallback_allowed, args):
     if point_spent is None:
         pl = dom.get("pointsLeft")
         point_spent = 330 - int(pl) if pl not in (None, "") else None
-    issue_count = dom.get("issueCount", 0)
+    issues = dom.get("issues", [])
+    builder_bugs = [i for i in issues if any(i.startswith(k) for k in KNOWN_BUILDER_BUGS)]
+    real_issues = [i for i in issues if i not in builder_bugs]
 
     result = {
         "id": build_id,
-        "ok": issue_count == 0 and point_spent == 330 and power == 20,
+        "ok": not real_issues and point_spent == 330 and power == 20,
         "power": power,
         "pointSpent": point_spent,
-        "issueCount": issue_count,
-        "issues": dom.get("issues", []),
+        "issueCount": len(real_issues),
+        "issues": real_issues,
+        "builderBugs": builder_bugs,
         "talentsAccepted": len(cur.get("talents", [])),
         "talentsSent": len(env["build"].get("talents", [])),
         "shrineMode": state.get("shrineMode"),
@@ -254,7 +337,7 @@ def main():
             sys.exit(1)
 
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.on("dialog", lambda d: d.accept())
+        page.on("dialog", accept_dialog)
 
         for build_id, env in builds:
             log(f"[verify] {build_id}: loading...")
@@ -277,7 +360,7 @@ def main():
                         pass
                     ctx = visible_ctx
                     page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                    page.on("dialog", lambda d: d.accept())
+                    page.on("dialog", accept_dialog)
                     try:
                         result = verify_one(page, ctx, build_id, env, headless_fallback_allowed=False, args=args)
                         if result:
@@ -298,7 +381,7 @@ def main():
                                 pass
                             ctx = headless_ctx
                             page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                            page.on("dialog", lambda d: d.accept())
+                            page.on("dialog", accept_dialog)
                         else:
                             log(f"[verify] {build_id}: continuing remaining builds in visible "
                                 "mode (headless-restore relaunch failed)")
