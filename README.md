@@ -7,6 +7,9 @@ mantras with gems, gear, oath/origin/race — validates it with the same rules t
 builder applies, scores it against the archetype, and hands you a build code you paste
 into deepwoken.co with one bookmark click.
 
+**Live site: <https://turnedtroll.github.io/dwbuilder/>** (GitHub Pages, redeployed on every
+push to `main` by `.github/workflows/pages.yml`).
+
 Every one of the 115 default builds loads in the live builder at Power 20, 330 points,
 with zero build issues (see *Quality gates*).
 
@@ -14,7 +17,7 @@ with zero build issues (see *Quality gates*).
 
 | Path | What |
 |---|---|
-| `page/` | The UI (`index.html`, `app.js`, `styles.css`). Published as a claude.ai Artifact. |
+| `page/` | The UI (`index.html`, `app.js`, `styles.css`). `index.html` is a fragment; `pipeline/serve_local.py` wraps it into the full document that is deployed. |
 | `engine/` | Pure ES modules shared by the page and the tests: `stats`, `shrine` (Shrine of Order port), `convert` (feed build ⇄ core ⇄ builder draft), `validate`, `score`, `assemble`. |
 | `data/game.js(on)` | Slimmed game data (talents, mantras, weapons, outfits, oaths, races …) from `pipeline/slimdata.py`. |
 | `data/archetypes.js(on)` | Mined archetypes from `pipeline/mine.py`. |
@@ -30,9 +33,9 @@ npm run pytest      # pipeline: 11 tests
 python pipeline/serve_local.py   # http://localhost:8080/ — mirrors the published layout into out/site/
 ```
 
-The page needs no build step and no dependencies. Locally the *Refine with AI* and
-*Library* buttons stay hidden — they use the claude.ai Artifact `sample` and `db`
-capabilities, which only exist on the published page.
+The page has no dependencies. The *Refine with AI* and *Library* buttons only appear when
+the page runs inside claude.ai with the `sample` / `db` capabilities; on the normal site they
+stay hidden.
 
 ## Using a build in deepwoken.co
 
@@ -58,7 +61,7 @@ npm run pipeline
 # 4. gates
 npm test && npm run pytest
 node pipeline/export_builds.mjs out/builds && python pipeline/verify_builder.py out/builds > out/verify.jsonl
-# 5. republish the page (data/*.js travel with it)
+# 5. commit data/*.js and push main - GitHub Pages redeploys
 ```
 
 `verify_builder.py` loads every exported build into the real builder (headless Chrome)
