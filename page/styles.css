@@ -188,3 +188,12 @@ tr.zero td { color: var(--muted); }
 @media (prefers-reduced-motion: no-preference) {
   .primary, .ghost, .chip-toggle { transition: filter .12s, border-color .12s, background .12s; }
 }
+
+/* library cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; background: var(--surface-2); display: grid; gap: 4px; }
+.card .name { font-weight: 600; }
+.card .meta { font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.card .ghost { justify-self: start; margin-top: 4px; }
+.ghost.on { border-color: var(--accent); color: var(--accent); }
+#playstyle { margin: 0 0 10px; font-size: 15px; }

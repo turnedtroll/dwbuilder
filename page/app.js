@@ -25,8 +25,11 @@ catch(e){alert('That did not look like a dwbuilder build code.');}})();`;
 const state = {
   include: new Set(), exclude: new Set(),
   mustTalents: [], avoidTalents: [], mustMantras: [], avoidMantras: [],
-  build: null, auto: true,
+  build: null, req: null, auto: true,
+  sample: null, db: null, libraryUnsub: null,
 };
+const archetypeOf = b => ARCH.archetypes.find(a => a.id === b?.based_on?.archetype) ?? null;
+const isPathEntry = n => typeof n === "string" && (n.startsWith("Oath: ") || n.startsWith("Murmur: "));
 
 // ---------- form population ----------
 function fillSelect(id, names) {
@@ -135,9 +138,11 @@ function showError(msg, kind = "bad") {
 
 function generate() {
   try {
-    const build = E.assemble(readRequest(), ARCH.archetypes, GAME);
-    state.build = build;
+    const req = readRequest();
+    const build = E.assemble(req, ARCH.archetypes, GAME);
+    state.build = build; state.req = req;
     showError("");
+    $("refine-section").hidden = true;
     render(build);
   } catch (e) {
     console.error(e);
@@ -243,6 +248,177 @@ async function copyCode() {
   }
 }
 
+// ---------- capabilities: Refine with AI (sample), Library (db) ----------
+// `claude.use(name)` resolves the namespace or null (not served / not granted / failed) - the
+// page must work with both null: the buttons stay hidden and nothing throws.
+async function useCapability(name) {
+  try {
+    if (!globalThis.claude?.use) return null;
+    return (await globalThis.claude.use(name)) ?? null;
+  } catch { return null; }
+}
+
+// Top-n talents/mantras the build does not have yet but could take right now - the vocabulary
+// Claude may swap in (it must not invent names). Ranked by corpus-wide frequency (each
+// archetype's frequency list weighted by its member count), since the picker has usually already
+// taken everything on the build's own archetype list.
+let _globalFreq = null;
+function globalFreq() {
+  if (_globalFreq) return _globalFreq;
+  const tal = new Map(), man = new Map();
+  for (const a of ARCH.archetypes) {
+    for (const [t, f] of a.talent_freq) tal.set(t, (tal.get(t) ?? 0) + f * a.members);
+    for (const [m, f] of a.mantra_freq) man.set(m, (man.get(m) ?? 0) + f * a.members);
+  }
+  const rank = m => [...m.entries()].sort((x, y) => y[1] - x[1]).map(([n]) => n);
+  return (_globalFreq = { talents: rank(tal), mantras: rank(man) });
+}
+function candidateTalents(build, n) {
+  const have = new Set(build.talents);
+  return globalFreq().talents.filter(t => !have.has(t) && GAME.talents[t] && !isPathEntry(t) && E.talentObtainable(t, build, GAME).ok).slice(0, n);
+}
+function candidateMantras(build, n) {
+  const have = new Set(build.mantras);
+  return globalFreq().mantras.filter(m => !have.has(m) && GAME.mantras[m] && E.meetsStats(build.final, GAME.mantras[m].reqs ?? {})
+    && (!GAME.mantras[m].attunement || (build.final[GAME.mantras[m].attunement] ?? 0) > 0)).slice(0, n);
+}
+
+// Re-derive everything assemble() derives from a core after talents/mantras changed.
+function rescore(build) {
+  const core = { ...build };
+  const a = archetypeOf(build);
+  core.validation = E.validate(core, GAME);
+  if (a) { const { score, breakdown } = E.scoreBuild(core, a, GAME); core.meta_score = score; core.score_breakdown = breakdown; }
+  core.draft = E.toDraft(core);
+  return core;
+}
+
+function applySwap(build, swap) {
+  if (isPathEntry(swap.remove) || isPathEntry(swap.add)) return null; // oath/murmur are path choices, not swappable talents
+  const c = { ...build, talents: [...build.talents], mantras: [...build.mantras], mantraMods: { ...(build.mantraMods ?? {}) } };
+  const list = swap.kind === "mantra" ? c.mantras : c.talents;
+  if (swap.remove) { const i = list.indexOf(swap.remove); if (i < 0) return null; list.splice(i, 1); if (swap.kind === "mantra") delete c.mantraMods[swap.remove]; }
+  if (swap.add) {
+    if (list.includes(swap.add)) return null;
+    if (swap.kind === "mantra" ? !GAME.mantras[swap.add] : !GAME.talents[swap.add]) return null;
+    list.push(swap.add);
+    if (swap.kind === "mantra") c.mantraMods[swap.add] = { gem: "None", spark: "None" };
+  }
+  return c;
+}
+
+async function refine() {
+  const build = state.build, req = state.req, sample = state.sample;
+  if (!build || !sample) return;
+  const btn = $("ai-refine"); btn.disabled = true;
+  const section = $("refine-section"), status = $("refine-status");
+  section.hidden = false; status.hidden = false; status.textContent = "Thinking…";
+  $("playstyle").textContent = ""; $("refine-swaps").replaceChildren();
+  try {
+    const slice = {
+      talents: Object.fromEntries([...build.talents, ...candidateTalents(build, 60)].filter(t => GAME.talents[t]).map(t => [t, { reqs: GAME.talents[t].reqs, desc: GAME.talents[t].desc }])),
+      mantras: Object.fromEntries([...build.mantras, ...candidateMantras(build, 30)].filter(m => GAME.mantras[m]).map(m => [m, { reqs: GAME.mantras[m].reqs, category: GAME.mantras[m].category, desc: GAME.mantras[m].desc }])),
+    };
+    const prompt = `You are refining a Deepwoken build. Only propose swaps using names present in the provided lists. Return JSON {"swaps":[{"kind":"talent"|"mantra","remove":string|null,"add":string|null,"reason":string}],"playstyle":string}. Max 6 swaps. Player's request: ${req?.free_text || "(none - just tighten the build)"}\nBuild: ${JSON.stringify({ final: build.final, talents: build.talents, mantras: build.mantras, oath: build.oath, origin: build.origin })}\nAvailable: ${JSON.stringify(slice)}`;
+    const res = await sample.json(prompt, { modelTier: "quick" });
+    const swaps = Array.isArray(res?.swaps) ? res.swaps.slice(0, 6) : [];
+    let current = build; const applied = [], rejected = [];
+    for (const sw of swaps) {
+      if (!sw || (sw.kind !== "talent" && sw.kind !== "mantra") || (!sw.remove && !sw.add)) continue;
+      const next = applySwap(current, sw);
+      const scored = next && rescore(next);
+      if (scored && scored.validation.ok) { current = scored; applied.push(sw); }
+      else rejected.push({ ...sw, why: next ? (scored.validation.errors[0]?.msg ?? "invalid") : "name not in build / unknown" });
+    }
+    state.build = current;
+    render(current);
+    section.hidden = false; status.hidden = true;
+    $("playstyle").textContent = typeof res?.playstyle === "string" ? res.playstyle : "";
+    const line = (sw, cls, tail) => el("li", { class: cls }, el("code", { text: sw.kind }),
+      `${sw.remove ? `− ${sw.remove}` : ""}${sw.remove && sw.add ? " → " : ""}${sw.add ? `+ ${sw.add}` : ""}`, tail ? ` — ${tail}` : "");
+    $("refine-swaps").replaceChildren(el("ul", {},
+      ...applied.map(sw => line(sw, "", sw.reason)),
+      ...rejected.map(sw => line(sw, "warn", `rejected: ${sw.why}`))));
+    if (!applied.length && !rejected.length) $("refine-swaps").append(el("p", { class: "hint", text: "No swaps proposed." }));
+    toast(`Refined: ${applied.length} swap${applied.length === 1 ? "" : "s"} applied${rejected.length ? `, ${rejected.length} rejected` : ""}`);
+  } catch (e) {
+    status.hidden = true;
+    const code = e?.code;
+    if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared" || code === "capability_disabled" || code === "capability_removed") {
+      btn.hidden = true; section.hidden = true;
+    } else if (code === "rate_limited") toast("Claude is busy — try again in a minute");
+    else if (code === "cancelled") { /* nothing to say */ }
+    else toast(`Refine failed: ${e?.message ?? e}`);
+  } finally { btn.disabled = false; }
+}
+
+// Library: builds/<id> documents {name, author, request, build (without draft), created}.
+function stripBuild(b) { const { draft, ...rest } = b; return rest; }
+
+async function saveToLibrary() {
+  const db = state.db, build = state.build; if (!db || !build) return;
+  const author = (prompt("Your name for the library entry:", "") ?? "").trim();
+  if (!author) return;
+  const btn = $("save-library"); btn.disabled = true;
+  try {
+    await db.collection("builds").doc(crypto.randomUUID()).set({
+      name: build.name, author, role: build.based_on?.archetype?.split("-")[0] ?? "", score: build.meta_score,
+      request: state.req ?? {}, build: JSON.parse(JSON.stringify(stripBuild(build))), created: Date.now(),
+    });
+    toast("Saved to the library");
+  } catch (e) {
+    const code = e?.code;
+    if (code === "quota_exceeded") toast("Library is full — delete some builds first");
+    else if (code === "not_granted" || code === "revoked" || code === "capability_disabled" || code === "capability_removed") { btn.hidden = true; $("library-tab").hidden = true; }
+    else toast(`Save failed: ${e?.message ?? e}`);
+  } finally { btn.disabled = false; }
+}
+
+function renderLibrary(snap) {
+  const cards = $("library-cards"); cards.replaceChildren();
+  $("library-empty").hidden = !snap.empty;
+  for (const d of snap.docs) {
+    const v = d.data() ?? {};
+    const score = Number(v.score ?? v.build?.meta_score ?? 0);
+    cards.append(el("div", { class: "card" },
+      el("div", { class: "name", text: String(v.name ?? "Untitled") }),
+      el("div", { class: "meta" },
+        el("span", { class: `badge ${score >= 70 ? "ok" : score >= 50 ? "warn" : "bad"}`, text: `meta ${score}` }),
+        el("span", { text: String(v.role ?? "") }),
+        el("span", { text: v.author ? `by ${v.author}` : "" }),
+        el("span", { text: v.created ? new Date(Number(v.created)).toLocaleDateString() : "" })),
+      el("button", { type: "button", class: "ghost", text: "Load", onclick: () => {
+        if (!v.build) return;
+        const b = rescore(JSON.parse(JSON.stringify(v.build)));
+        state.build = b; state.req = v.request ?? state.req; state.auto = false;
+        $("refine-section").hidden = true;
+        render(b);
+        toast(`Loaded ${b.name}`);
+      } })));
+  }
+}
+
+function toggleLibrary() {
+  const section = $("library-section"), tab = $("library-tab");
+  section.hidden = !section.hidden; tab.classList.toggle("on", !section.hidden);
+  if (!section.hidden && !state.libraryUnsub && state.db) {
+    // Subscribe once; the snapshot re-renders the cards on every change.
+    state.libraryUnsub = state.db.collection("builds").orderBy("created", "desc").limit(50)
+      .onSnapshot(renderLibrary, e => { toast(`Library unavailable: ${e?.message ?? e?.code}`); state.libraryUnsub = null; });
+  }
+}
+
+async function wireCapabilities() {
+  const [sample, db] = await Promise.all([useCapability("sample"), useCapability("db")]);
+  state.sample = sample; state.db = db;
+  if (sample) { $("ai-refine").hidden = false; $("ai-refine").addEventListener("click", refine); }
+  if (db) {
+    $("save-library").hidden = false; $("library-tab").hidden = false;
+    $("save-library").addEventListener("click", saveToLibrary);
+    $("library-tab").addEventListener("click", toggleLibrary);
+  }
+}
+
 // ---------- boot ----------
 function boot() {
   fillSelect("oath", Object.keys(GAME.oaths));
@@ -275,6 +451,7 @@ function boot() {
   if (top) $("role").value = top.role;
   state.auto = true;
   generate();
+  wireCapabilities(); // resolves later (or null); the page is already usable
 }
 
 try {
