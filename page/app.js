@@ -124,16 +124,28 @@ function chipList(baseId, kind, arr) {
 }
 
 // ---------- request ----------
+function resolveWeapon(raw) {
+  const name = (raw ?? "").trim(); if (!name) return null;
+  if (GAME.weapons[name]) return name;
+  const lower = name.toLowerCase();
+  return Object.keys(GAME.weapons).find(w => w.toLowerCase() === lower) ?? null;
+}
 function readRequest() {
   const v = id => $(id).value || null;
   const wt = $("weapon-type").value;
+  const weapon = wt === "none" ? null : resolveWeapon($("weapon").value);
+  if ($("weapon").value.trim() && !weapon && wt !== "none") {
+    const q = $("weapon").value.trim().toLowerCase();
+    const near = Object.keys(GAME.weapons).filter(w => w.toLowerCase().includes(q)).slice(0, 3);
+    throw new Error(`No weapon named "${$("weapon").value.trim()}"${near.length ? ` — did you mean ${near.join(", ")}?` : ""}`);
+  }
   return {
     role: $("role").value,
     include_attunements: [...state.include],
     exclude_attunements: [...state.exclude],
     attunementless: $("attunementless").checked,
     weapon_type: wt || null,
-    weapon: wt === "none" ? null : v("weapon"),
+    weapon,
     oath: v("oath"), origin: v("origin"), race: v("race"),
     shrine: $("shrine").checked,
     multifaceted: $("multifaceted").checked,

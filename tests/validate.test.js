@@ -225,6 +225,18 @@ test("mantra_reqs: an oath's mantras need that oath; an origin's mantras need th
   assert.ok(!validate(ok, game).errors.some(e => e.msg.startsWith("Sightless Beam")));
 });
 
+test("equipment_reqs and traits: gear with unmet stat requirements and over-cap traits are errors", () => {
+  const c = structuredClone(healer);
+  c.equipment = { ...c.equipment, Head: { name: "Assassin's Hood", qualityStars: 3, pips: [], enchant: "" } }; // Agility 10; healer has 25 -> ok
+  assert.ok(!validate(c, game).errors.some(e => e.code === "equipment_reqs"));
+  c.final.Agility = 5; c.final.Charisma += 20; // keep 330
+  assert.ok(validate(c, game).errors.some(e => e.code === "equipment_reqs" && e.msg.includes("Assassin's Hood")), JSON.stringify(validate(c, game).errors));
+  const t = structuredClone(healer); t.traits = { Vitality: 6, Erudition: 6, Proficiency: 3, Songchant: 0 }; // 15 > 12
+  assert.ok(validate(t, game).errors.some(e => e.code === "traits"), JSON.stringify(validate(t, game).errors));
+  const t2 = structuredClone(healer); t2.traits = { Vitality: 7, Erudition: 0, Proficiency: 0, Songchant: 0 }; // 7 > 6
+  assert.ok(validate(t2, game).errors.some(e => e.code === "traits"));
+});
+
 test("resolveTalent strips variant suffix and ignores case", () => {
   assert.equal(resolveTalent("Wyvern's Claw [LHT]", game), "Wyvern's Claw");
   assert.equal(resolveTalent("To the Finish", game), "To The Finish");

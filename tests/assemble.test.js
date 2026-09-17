@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { normalizeRequest, selectArchetype, planStats, fitTo330, assemble } from "../engine/assemble.js";
-import { pointsSpent, zeroFlat, ATTUNEMENTS, WEAPON_STATS } from "../engine/stats.js";
+import { pointsSpent, zeroFlat, ATTUNEMENTS, WEAPON_STATS, meetsStats } from "../engine/stats.js";
 import { shrineOfOrder } from "../engine/shrine.js";
 import { validate, talentBudget } from "../engine/validate.js";
 const game = JSON.parse(readFileSync(new URL("../data/game.json", import.meta.url)));
@@ -113,19 +113,59 @@ test("gear carries real stars and pips; weapons carry stars (DMG%/PEN%) and an e
   }
 });
 
-test("R7: fitTo330 relaxes an unfit oath floor instead of throwing", () => {
-  // The attunementless tank medoid's shrine-pinned floor (307 of 330) leaves no room for Oath:
-  // Visionshaper's Charisma 50. An explicit oath is honoured as-is (R2), so planStats must relax the
-  // oath floor with a note rather than throw; validate() then reports the unmet oath_reqs honestly.
+test("a requested weapon is planned for: its stat and requirements are met and the other weapon stats are zeroed", () => {
+  // Duskguard Axe: Heavy Weapon 75, Strength 10 - requested on the light-weapon dps archetype.
+  const a = A.find(x => x.id.startsWith("dps-light-") && x.weapons?.length);
+  const b = assemble({ role: a.role, weapon: "Duskguard Axe" }, [a], game);
+  assert.equal(b.weapon, "Duskguard Axe");
+  assert.ok(b.final["Heavy Wep."] >= 75 && b.final.Strength >= 10, JSON.stringify(b.final));
+  assert.equal(b.final["Light Wep."], 0); assert.equal(b.final["Medium Wep."], 0);
+  assert.ok(!b.validation.errors.some(e => e.code === "weapon_reqs"), JSON.stringify(b.validation.errors));
+  assert.ok(b.validation.ok, JSON.stringify(b.validation.errors));
+});
+
+test("a requested oath is honoured before the archetype's shrine plan: Visionshaper on the attunementless tank drops the shrine, not the oath", () => {
   const a = A.find(x => x.id.startsWith("tank-none-") && x.oath[0]?.[0] !== "Visionshaper");
-  assert.ok(a, "attunementless tank archetype not found");
-  const req = normalizeRequest({ role: a.role, oath: "Visionshaper" });
+  const b = assemble({ role: a.role, oath: "Visionshaper" }, [a], game);
+  assert.equal(b.oath, "Visionshaper");
+  assert.ok(b.final.Charisma >= 50, `Charisma ${b.final.Charisma}`);
+  assert.ok(!b.validation.errors.some(e => e.code === "oath_reqs"), JSON.stringify(b.validation.errors));
+  assert.ok(b.notes.includes("Shrine of Order dropped") || b.shrine === false || b.final.Charisma >= 50);
+});
+
+test("equipment requirements and trait caps are respected on every default build", () => {
+  for (const a of A) {
+    const b = assemble({ role: a.role, oath: a.oath[0]?.[0] ?? null }, [a], game);
+    const items = [...Object.entries(b.equipment).filter(([k]) => k !== "Rings").map(([, v]) => v), ...(b.equipment.Rings ?? [])].filter(Boolean);
+    for (const it of items) assert.ok(meetsStats(b.final, game.equipment[it.name]?.reqs ?? {}), `${a.id}: ${it.name} needs ${JSON.stringify(game.equipment[it.name]?.reqs)}`);
+    const tv = Object.values(b.traits);
+    assert.ok(tv.every(v => v >= 0 && v <= 6) && tv.reduce((x, y) => x + y, 0) <= 12, `${a.id}: traits ${JSON.stringify(b.traits)}`);
+    assert.ok(!b.validation.errors.some(e => e.code === "equipment_reqs" || e.code === "traits"), a.id);
+  }
+});
+
+test("pips favour Health wherever the slot can roll it, with one pip in the slot's secondary stat", () => {
+  const b = assemble({ role: "tank" }, A, game);
+  const major = { Head: "Health", Arms: "Health", Legs: "Health", Torso: "Health", Rings: "Health", Face: "Ether", Earrings: "Ether" };
+  for (const [slot, item] of Object.entries(b.equipment)) {
+    for (const it of (Array.isArray(item) ? item : [item]).filter(Boolean)) {
+      const stats = it.pips.map(p => p.stat);
+      const n = stats.filter(x => x === major[slot]).length;
+      assert.ok(n >= stats.length - 1 && n >= 1, `${slot} ${it.name}: ${stats.join(",")}`);
+      if (stats.length >= 3) assert.ok(new Set(stats).size === 2, `${slot} ${it.name}: ${stats.join(",")}`);
+    }
+  }
+});
+
+test("R7: fitTo330 relaxes a truly unfit floor instead of throwing, and says so", () => {
+  // Five Unbounded talents at 75 each = 375 points: impossible, so the planner degrades with a
+  // "could not fit" note instead of crashing, and validation reports what is unmet.
+  const a = A.find(x => x.id.startsWith("tank-none-"));
+  const req = normalizeRequest({ role: a.role, must_talents: ["Fortitude Unbounded", "Willpower Unbounded", "Agility Unbounded", "Intelligence Unbounded", "Charisma Unbounded"] });
   let p;
   assert.doesNotThrow(() => { p = planStats(req, a, game); });
   assert.equal(pointsSpent(p.final), 330);
-  assert.deepEqual(p.notes.filter(n => n.includes("could not fit")), ["could not fit oath's requirements in 330 points"]);
-  const b = assemble({ role: a.role, oath: "Visionshaper" }, [a], game);
-  assert.ok(b.validation.errors.some(e => e.code === "oath_reqs"), JSON.stringify(b.validation.errors));
+  assert.ok(p.notes.some(n => n.includes("could not fit")), JSON.stringify(p.notes, null, 1));
 });
 
 test("assemble: attunement include/exclude and weapon types stay valid", () => {

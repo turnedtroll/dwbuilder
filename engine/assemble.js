@@ -321,7 +321,10 @@ export function planStats(req, archetype, game) {
     }
   }
 
-  // 4. weapon
+  // 4. weapon. A weapon the request names decides the weapon type and its own requirements are
+  // hard floors (planned exactly like the oath's), so the build always meets the weapon it wields.
+  const reqWeapon = req.weapon ? game.weapons[req.weapon] : null;
+  if (reqWeapon && !req.weapon_type && reqWeapon.wtype) req = { ...req, weapon_type: reqWeapon.wtype };
   if (req.weapon_type === "none") {
     for (const w of WEAPON_STATS) { target[w] = 0; if (pre) pre[w] = 0; }
     notes.push("weapon removed: all weapon stats zeroed");
@@ -353,8 +356,17 @@ export function planStats(req, archetype, game) {
   // its own stat reqs must raise target/mustMin so the plan actually reaches them, not just the
   // prerequisite talents pickTalents prioritizes for it below.
   if (req.oath && req.oath !== "None") applyReqs(game.talents[`Oath: ${req.oath}`]?.reqs, target, mustMinOath);
+  const mustMinWeapon = zeroFlat();
+  if (reqWeapon) {
+    applyReqs(reqWeapon.reqs, target, mustMinWeapon);
+    if (reqWeapon.wtype) { // the weapon's own stat carries the build's damage: at least the weapon's req, and 65 like weapon_type
+      const w = canon(reqWeapon.wtype) ?? reqWeapon.wtype;
+      target[w] = Math.max(target[w] ?? 0, 65);
+    }
+    notes.push(`planned for ${req.weapon}: ${Object.entries(reqWeapon.reqs ?? {}).map(([k, v]) => `${k} ${v}`).join(", ") || "no requirements"}`);
+  }
   const mustMin = zeroFlat();
-  for (const s of ALL_STATS) mustMin[s] = Math.max(mustMinMantras[s] ?? 0, mustMinTalents[s] ?? 0, mustMinOath[s] ?? 0);
+  for (const s of ALL_STATS) mustMin[s] = Math.max(mustMinMantras[s] ?? 0, mustMinTalents[s] ?? 0, mustMinOath[s] ?? 0, mustMinWeapon[s] ?? 0);
 
   // 6. stack minimum + racial bonus floors
   if (pre) pre[a.stack.stat] = Math.max(pre[a.stack.stat] ?? 0, a.stack.min);
@@ -365,6 +377,7 @@ export function planStats(req, archetype, game) {
   if (pre) for (const s of ALL_STATS) if (target[s] > 0) pre[s] = Math.max(pre[s] ?? 0, 1);
 
   // 7. shrine: fit pre to the power-budget window, derive shrine base, raise target to meet it
+  const targetNoShrine = { ...target }; // kept so the shrine can be dropped in step 8 if it can't fit the request
   let shrineBase = null, shrinePower = null;
   if (pre) {
     // R8: the budget power comes from the archetype's OWN pre-shrine block, not the cluster's modal
@@ -389,34 +402,44 @@ export function planStats(req, archetype, game) {
   for (const s of ALL_STATS) if (mustMin[s] > 0) priority.add(s);
   for (const incRaw of req.include_attunements) priority.add(canon(incRaw) ?? incRaw);
 
-  // R7: must/oath floors are layered by source (mantras, then talents, then oath) so a
-  // budget-infeasible combination degrades instead of throwing. Race-bonus and shrine-base floors
-  // are never relaxed. `relaxedCount` sources (from the front of this list) are excluded from the
-  // floor on each retry after fitTo330 reports it cannot fit.
-  const relaxOrder = [
+  // Relief order when the floors can't fit in 330 points (R7, amended): first give up the
+  // archetype's own preferences - the stack floor, then the Shrine of Order plan (its base floors
+  // are what usually leaves no room) - before any must-list, and relax the oath / weapon the
+  // request named only as a last resort, with a "could not fit" note. Race-bonus floors never move.
+  const sources = [
     { label: "must_mantras", src: mustMinMantras },
     { label: "must_talents", src: mustMinTalents },
     { label: "oath", src: mustMinOath },
-  ].filter(({ src }) => ALL_STATS.some(s => (src[s] ?? 0) > 0)); // only sources that actually add a floor
-  const floor330For = relaxedCount => {
+    { label: "weapon", src: mustMinWeapon },
+  ].filter(({ src }) => ALL_STATS.some(st => (src[st] ?? 0) > 0)); // only sources that actually add a floor
+  let useStackFloor = true, relaxedCount = 0;
+  const floor330For = () => {
     const floor330 = {};
-    for (const s of ALL_STATS) {
-      const stackFloor = s === a.stack.stat ? Math.min(target[s] ?? 0, a.stack.modal - 25) : 0;
+    for (const st of ALL_STATS) {
+      const stackFloor = useStackFloor && st === a.stack.stat ? Math.min(target[st] ?? 0, a.stack.modal - 25) : 0;
       let mustFloor = 0;
-      for (let i = relaxedCount; i < relaxOrder.length; i++) mustFloor = Math.max(mustFloor, relaxOrder[i].src[s] ?? 0);
-      floor330[s] = Math.max(0, shrineBase?.[s] ?? 0, bonus[s] ?? 0, mustFloor, stackFloor);
+      for (let i = relaxedCount; i < sources.length; i++) mustFloor = Math.max(mustFloor, sources[i].src[st] ?? 0);
+      floor330[st] = Math.max(0, shrineBase?.[st] ?? 0, bonus[st] ?? 0, mustFloor, stackFloor);
     }
     return floor330;
   };
+  const dropShrine = () => {
+    pre = null; shrineBase = null; shrinePower = null;
+    for (const st of ALL_STATS) target[st] = targetNoShrine[st];
+    for (const [st, v] of Object.entries(bonus)) target[st] = Math.max(target[st] ?? 0, v);
+    for (const st of ALL_STATS) target[st] = Math.max(target[st] ?? 0, mustMin[st] ?? 0);
+  };
 
-  let fit, relaxedCount = 0;
+  let fit;
   for (;;) {
     try {
-      fit = fitTo330(target, floor330For(relaxedCount), priority, a.post_shrine_spread, a.stack.stat);
+      fit = fitTo330(target, floor330For(), priority, a.post_shrine_spread, a.stack.stat);
       break;
     } catch (e) {
-      if (relaxedCount >= relaxOrder.length) throw new Error(`${a.id}: ${e.message}`);
-      notes.push(`could not fit ${relaxOrder[relaxedCount].label}'s requirements in 330 points`);
+      if (useStackFloor) { useStackFloor = false; notes.push(`${a.stack.stat} stack floor dropped to fit the request`); continue; }
+      if (pre) { dropShrine(); notes.push("Shrine of Order dropped: the request's requirements don't fit under this archetype's shrine plan"); continue; }
+      if (relaxedCount >= sources.length) throw new Error(`${a.id}: ${e.message}`);
+      notes.push(`could not fit ${sources[relaxedCount].label}'s requirements in 330 points`);
       relaxedCount++;
     }
   }
@@ -696,32 +719,43 @@ function pickOutfit(archetype, origin, final, game) {
   return "None";
 }
 
-// Each item gets the stars and pip stats the archetype's members actually roll in that slot
-// (gear_pips: modal 3-star signature per slot) - Health/Physical Armor on head and arms, Ether on
-// face and earrings, Health/Posture on rings ... - not bare names with empty pips.
-const DEFAULT_PIPS = {
-  Head: [["Health", "Rare"], ["Health", "Rare"], ["Physical Armor", "Rare"]], Arms: [["Health", "Rare"], ["Health", "Rare"], ["Physical Armor", "Rare"]],
-  Legs: [["Health", "Rare"], ["Health", "Rare"], ["Ether", "Rare"]], Torso: [["Health", "Rare"], ["Health", "Rare"], ["Ether", "Rare"]],
-  Face: [["Ether", "Rare"], ["Ether", "Rare"], ["Sanity", "Rare"]], Earrings: [["Ether", "Rare"], ["Ether", "Rare"], ["Sanity", "Rare"]],
-  Rings: [["Health", "Rare"], ["Health", "Rare"], ["Posture", "Rare"]],
+// Pips: Health on every slot that can roll it (the player's rule), with one pip in the slot's
+// secondary stat so the builder's "put at least one pip into a different stat" rule holds; face
+// and earrings can't roll Health (Ether, then Sanity). Pip count, stars and rarities come from the
+// archetype's mined signature for the slot (gear_pips), falling back to a 3-star, 3-pip roll.
+const PIP_PLAN = {
+  Head: ["Health", "Physical Armor"], Arms: ["Health", "Physical Armor"], Legs: ["Health", "Ether"], Torso: ["Health", "Ether"],
+  Rings: ["Health", "Posture"], Face: ["Ether", "Sanity"], Earrings: ["Ether", "Sanity"],
 };
 function itemFor(name, slot, archetype) {
   const sig = archetype.gear_pips?.[slot];
-  const pips = (sig?.pips ?? DEFAULT_PIPS[slot] ?? []).map(([stat, rarity]) => ({ stat, rarity }));
+  const rarities = (sig?.pips ?? [["Health", "Rare"], ["Health", "Rare"], ["Health", "Rare"]]).map(([, r]) => r);
+  const [major, minor] = PIP_PLAN[slot] ?? ["Health", "Ether"];
+  const pips = rarities.map((rarity, i) => ({ stat: rarities.length >= 3 && i === rarities.length - 1 ? minor : major, rarity }));
   return { name, qualityStars: sig?.stars ?? 3, pips, enchant: "" };
 }
-function pickEquipment(archetype) {
+function pickEquipment(archetype, final, game) {
+  const okItem = name => name && meetsStats(final, game.equipment[name]?.reqs ?? {});
   const equipment = {};
   for (const slot of EQUIP_SLOTS) {
-    const top = archetype.equipment?.[slot]?.[0]?.[0];
+    const top = (archetype.equipment?.[slot] ?? []).map(([n]) => n).find(okItem);
     equipment[slot] = top ? itemFor(top, slot, archetype) : null;
   }
-  const rings = archetype.equipment?.Rings ?? [];
-  equipment.Rings = [0, 1, 2, 3].map(i => {
-    const name = rings[i]?.[0];
-    return name ? itemFor(name, "Rings", archetype) : null;
-  });
+  const rings = (archetype.equipment?.Rings ?? []).map(([n]) => n).filter(okItem);
+  equipment.Rings = [0, 1, 2, 3].map(i => rings[i] ? itemFor(rings[i], "Rings", archetype) : null);
   return equipment;
+}
+
+// Builder caps: 6 points per trait, 12 in total. The archetype's per-trait modes can add up to more.
+export function clampTraits(traits) {
+  const t = {};
+  for (const k of ["Vitality", "Erudition", "Proficiency", "Songchant"]) t[k] = Math.max(0, Math.min(6, Number(traits?.[k] ?? 0)));
+  let total = Object.values(t).reduce((x, y) => x + y, 0);
+  while (total > 12) { // shave the smallest non-zero first (it's the least deliberate)
+    const k = Object.keys(t).filter(x => t[x] > 0).sort((x, y) => t[x] - t[y])[0];
+    t[k]--; total--;
+  }
+  return t;
 }
 
 // §Task 10.3: pick gear (origin/oath/murmur/bell/boons/flaws/traits/outfit/weapon/enchant/equipment)
@@ -735,14 +769,14 @@ export function pickGear(req, archetype, coreDraft, game) {
   const boons = [boonNames[0] ?? "None", boonNames[1] ?? "None"];
   const flawNames = (archetype.flaws ?? []).map(([n]) => n);
   const flaws = [flawNames[0] ?? "None", flawNames[1] ?? "None", flawNames[2] ?? "None"];
-  const traits = { Vitality: 0, Erudition: 0, Proficiency: 0, Songchant: 0, ...(archetype.traits_modal ?? {}) };
+  const traits = clampTraits(archetype.traits_modal);
   const final = coreDraft.final;
   const outfit = pickOutfit(archetype, origin, final, game);
   const weapon = pickWeapon(req, archetype, final, game);
   const enchant = weapon ? (archetype.enchants?.[0]?.[0] || "Astral") : "";
   // Weapon stars: 3 of the mod the archetype's members roll (DMG% or PEN%).
   const weaponStars = weapon ? { count: 3, mod: archetype.weapon_stars?.mod ?? "DMG%" } : { count: 0, mod: "" };
-  const equipment = pickEquipment(archetype);
+  const equipment = pickEquipment(archetype, final, game);
   return { outfit, weapon, enchant, weaponStars, equipment, boons, flaws, traits, murmur, bell, origin, oath };
 }
 

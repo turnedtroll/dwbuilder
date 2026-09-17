@@ -340,6 +340,17 @@ export function validate(core, game) {
     if (!o) err("unknown_outfit", core.outfit);
     else { if (!meetsStats(core.final, o.reqs)) err("outfit_reqs", core.outfit); if (o.origin && o.origin !== core.origin) err("outfit_reqs", `${core.outfit} needs origin ${o.origin}`); }
   }
+  for (const [slot, item] of Object.entries(core.equipment ?? {})) {
+    for (const it of (Array.isArray(item) ? item : [item])) {
+      if (!it?.name) continue;
+      const e = game.equipment[it.name];
+      if (!e) { warn("unknown_equipment", `${slot}: ${it.name}`); continue; }
+      if (!meetsStats(core.final, e.reqs ?? {})) err("equipment_reqs", `${slot}: ${it.name} needs ${Object.entries(e.reqs).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+    }
+  }
+  const tv = Object.values(core.traits ?? {}).map(Number);
+  if (tv.some(v => v < 0 || v > 6)) err("traits", `a trait is over 6 (${JSON.stringify(core.traits)})`);
+  if (tv.reduce((x, y) => x + y, 0) > 12) err("traits", `${tv.reduce((x, y) => x + y, 0)} trait points, max 12`);
   // Builder rule: an item with 3+ pips all in one stat gets "put at least one pip into a different stat".
   for (const [slot, item] of Object.entries(core.equipment ?? {})) {
     for (const it of (Array.isArray(item) ? item : [item])) {
