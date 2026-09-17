@@ -14,9 +14,48 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE = os.path.join(ROOT, "out", "site")
 
 
+# page/index.html is written as a document fragment (title + links + markup) so it can also be
+# published as a claude.ai Artifact, which supplies the skeleton itself. A normal host needs the
+# full document, so wrap it here.
+SKELETON = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Meta-derived Deepwoken builds: pick a role and attunements, get a verified build with a leveling guide and one-click import into deepwoken.co.">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
+{head}
+</head>
+<body>
+{body}
+</body>
+</html>
+"""
+
+
+def wrap_fragment(fragment):
+    # everything up to and including the stylesheet links goes in <head>; the rest is the body
+    lines = fragment.splitlines()
+    head, body, in_head = [], [], True
+    for line in lines:
+        if in_head and (line.startswith("<title") or line.startswith("<link") or not line.strip()):
+            head.append(line)
+        else:
+            in_head = False
+            body.append(line)
+    nl = "\n"
+    return SKELETON.format(head=nl.join(l for l in head if l.strip()), body=nl.join(body))
+
+
 def build_site():
     shutil.rmtree(SITE, ignore_errors=True)
     shutil.copytree(os.path.join(ROOT, "page"), SITE)
+    with open(os.path.join(ROOT, "page", "index.html"), encoding="utf-8") as f:
+        fragment = f.read()
+    with open(os.path.join(SITE, "index.html"), "w", encoding="utf-8") as f:
+        f.write(wrap_fragment(fragment))
+    open(os.path.join(SITE, ".nojekyll"), "w").close()  # GitHub Pages: serve files as-is
     os.makedirs(os.path.join(SITE, "engine")), os.makedirs(os.path.join(SITE, "data"))
     for f in glob.glob(os.path.join(ROOT, "engine", "*.js")):
         shutil.copy(f, os.path.join(SITE, "engine"))
