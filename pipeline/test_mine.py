@@ -39,6 +39,23 @@ class Mine(unittest.TestCase):
         names = [n for n, _ in best["mantra_freq"][:15]]
         self.assertTrue({"Graceful Flame", "Reinforce", "Symbiotic Sustain"} & set(names), names)
 
+    def test_default_oath_is_the_medoids_oath(self):
+        # post_shrine_modal is the L1-medoid member's real build (ruling R6), so the archetype's
+        # default oath (oath[0]) must be the one that build actually holds - otherwise the engine
+        # plans stats for an oath the stat block was never meant for (e.g. Saintsworn's 15 in five
+        # attunements on a Frostdraw/Ironsing medoid). Frequencies stay honest; only the order changes.
+        from mine import load
+        by_id = {b["id"]: b for b in load()}
+        for x in self.a["archetypes"]:
+            med = by_id[x["medoid_id"]]
+            oath = med["meta"].get("Oath", "None")
+            if oath in (None, "", "None"):
+                self.assertTrue(not x["oath"] or x["oath"][0][0] != "None", x["id"])
+                continue
+            self.assertEqual(x["oath"][0][0], oath, x["id"])
+            self.assertTrue(x["id"].endswith(oath.lower().replace(" ", "")) or x["id"].rsplit("-", 1)[-1].isdigit(), x["id"])
+            self.assertEqual(sorted(x["oath"][1:], key=lambda kv: -kv[1]), x["oath"][1:], x["id"])
+
     def test_pointsmath(self):
         from mine import points_spent, power_for
         self.assertEqual(points_spent({"Charisma": 90, "Flamecharm": 1, "Thundercall": 1, "Frostdraw": 1}), 91)

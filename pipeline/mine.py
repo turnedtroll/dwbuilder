@@ -146,17 +146,22 @@ def summarize(key, members, game, resolve):
         equip[slot] = freq(c, 6, n)
     role, wtype = key[0], key[1]
     atts = key[2] if len(key) > 2 else tuple(a for a in ATT if post_modal_old[a] >= 40)
-    oath = key[3] if len(key) > 3 else modal([m["oath"] for m in members])
+    # Fallback-level clusters (oath not in the key) mix oaths; the stat block is the medoid's, so the
+    # medoid's oath is the only one guaranteed coherent with it -> it names the archetype and leads
+    # the oath list (rest stays by frequency). A "None"-oath medoid falls back to the modal oath.
+    oath = key[3] if len(key) > 3 else (medoid["oath"] if medoid["oath"] not in (None, "", "None") else modal([m["oath"] for m in members]))
+    oath_counts = Counter(m["oath"] for m in members)
+    oath_freq = [kv for kv in freq(oath_counts, len(oath_counts), n) if kv[0] == oath] + [kv for kv in freq(oath_counts, 5, n) if kv[0] != oath][:4]
     ident = "-".join([role, wtype, *(a.lower()[:5] for a in atts), oath.lower()]).replace(" ", "")
     return {
         "id": ident, "role": role, "label": f"{role.title()} · {'/'.join(atts) or 'attunementless'} · {wtype if wtype != 'none' else 'no weapon'} · {oath}",
-        "members": n, "example_ids": [m["id"] for m in members[:3]], "views_total": sum(m["views"] for m in members),
+        "members": n, "example_ids": [m["id"] for m in members[:3]], "medoid_id": medoid["id"], "views_total": sum(m["views"] for m in members),
         "stack": {"stat": stack_stat, "min": pct(stack_vals, .25), "modal": modal(stack_vals)},
         "pre_shrine_modal": pre_shrine_modal, "shrine_power_modal": modal(powers), "shrine_power_window": [min(powers), max(powers)],
         "shrined_rate": round(len(shrined) / n, 3), "post_shrine_modal": post_shrine_modal, "post_shrine_spread": spread,
         "talent_freq": freq(tal, 120, n), "mantra_freq": freq(man, 40, n),
         "gem_freq": {k: freq(v, 3, sum(v.values())) for k, v in gems.items()},
-        "oath": freq(Counter(m["oath"] for m in members), 5, n), "origin": freq(Counter(m["origin"] for m in members), 5, n),
+        "oath": oath_freq, "origin": freq(Counter(m["origin"] for m in members), 5, n),
         "race": freq(Counter(m["race"] for m in members), 5, n), "murmur": freq(Counter(m["murmur"] for m in members), 3, n),
         "bell": freq(Counter(m["bell"] for m in members), 3, n), "outfits": freq(Counter(m["outfit"] for m in members), 6, n),
         "weapons": freq(Counter(m["weapon"] for m in members), 8, n), "enchants": freq(Counter(m["enchant"] for m in members), 5, n),
