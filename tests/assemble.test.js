@@ -161,6 +161,22 @@ test("pips favour Health wherever the slot can roll it, with one pip in the slot
   }
 });
 
+test("friend's request: heavy Galebreathe weapon + Oathless + must Ghost picks a heavy Galebreathe archetype, keeps its shrine and takes Ghost's chain", () => {
+  const b = assemble({ role: "dps", include_attunements: ["Galebreathe"], weapon_type: "heavy", weapon: "Withered Gale Pale", oath: "Oathless", origin: "Lone Warrior", must_talents: ["Ghost"], multifaceted: true }, A, game);
+  assert.ok(b.based_on.archetype.startsWith("dps-heavy-galeb"), b.based_on.archetype);
+  assert.ok(b.shrine && b.preShrine, "shrine kept");
+  assert.ok(b.final["Heavy Wep."] >= 75 && b.final.Galebreathe >= 90, JSON.stringify(b.final));
+  for (const t of ["Ghost", "Swift Rebound", "Evasive Expert", "Risky Moves"]) assert.ok(b.talents.includes(t), `${t} missing`);
+  assert.ok(b.validation.ok && b.meta_score >= 70, `${b.meta_score} ${JSON.stringify(b.validation.errors)}`);
+});
+
+test("or-alternative and pseudo-stat requirements are planned (Silentheart's Agility 25 | Charisma 25; Guiding Star's Mind)", () => {
+  const s = assemble({ role: "dps", oath: "Silentheart" }, A, game);
+  assert.ok(!s.validation.errors.some(e => e.code === "oath_reqs"), JSON.stringify(s.validation.errors));
+  const g = assemble({ role: "dps", weapon: "Guiding Star" }, A, game);
+  assert.ok(!g.validation.errors.some(e => e.code === "weapon_reqs"), JSON.stringify(g.validation.errors));
+});
+
 test("R7: fitTo330 relaxes a truly unfit floor instead of throwing, and says so", () => {
   // Five Unbounded talents at 75 each = 375 points: impossible, so the planner degrades with a
   // "could not fit" note instead of crashing, and validation reports what is unmet.

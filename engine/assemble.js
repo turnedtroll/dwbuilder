@@ -44,6 +44,20 @@ function topWeaponStat(a) {
   return best;
 }
 
+// Selection signals. Matches earn points, and mismatches on things the request pinned (weapon
+// type, included/excluded attunements, attunementless) cost more than any single bonus can buy
+// back - previously a lone oath match (+30) could pick an attunementless light archetype for a
+// heavy Galebreathe request, and everything downstream had to fight that choice.
+function effectiveRequest(req, game) {
+  const r = { ...req, include_attunements: [...req.include_attunements] };
+  const w = req.weapon ? game?.weapons?.[req.weapon] : null;
+  if (w?.wtype && !r.weapon_type) r.weapon_type = w.wtype;
+  for (const [k, v] of Object.entries(w?.reqs ?? {})) { // a weapon that needs Galebreathe 90 is a Galebreathe request
+    const c = canon(k);
+    if (c && ATTUNEMENTS.includes(c) && Number(v) >= 40 && !r.include_attunements.some(x => (canon(x) ?? x) === c)) r.include_attunements.push(c);
+  }
+  return r;
+}
 function scoreArchetype(req, a) {
   let score = 100;
   for (const exRaw of req.exclude_attunements) {
@@ -52,31 +66,33 @@ function scoreArchetype(req, a) {
   }
   for (const incRaw of req.include_attunements) {
     const inc = canon(incRaw) ?? incRaw;
-    if ((a.post_shrine_modal[inc] ?? 0) >= 20) score += 20;
+    const v = a.post_shrine_modal[inc] ?? 0; // a real investment (40+) is a match; a dabble (20-39) barely counts
+    score += v >= 40 ? 20 : v >= 20 ? 5 : -35;
   }
+  if (req.attunementless && ATTUNEMENTS.some(at => (a.post_shrine_modal[at] ?? 0) >= 20)) score -= 30;
   if (req.weapon_type === "none") {
-    if (WEAPON_STATS.every(w => (a.post_shrine_modal[w] ?? 0) < 40)) score += 15;
+    score += WEAPON_STATS.every(w => (a.post_shrine_modal[w] ?? 0) < 40) ? 15 : -25;
   } else if (req.weapon_type) {
     const w = canon(req.weapon_type) ?? req.weapon_type;
-    if (topWeaponStat(a) === w) score += 15;
+    score += topWeaponStat(a) === w ? 20 : -25;
   }
-  // An explicitly requested oath is a strong identity signal, not a minor tiebreaker: the oath
-  // brings its own must-have mantras/talents (e.g. Linkstrider's healer kit), so it should outweigh
-  // a single include-attunement match (+20) or the weapon-type match (+15). Weighted at +30 so a
-  // requested oath's archetype wins over a same-role archetype that only matches attunement/weapon.
-  if (req.oath && a.oath?.[0]?.[0] === req.oath) score += 30;
+  // An explicitly requested oath is a strong identity signal (it brings its own mantras/talents and
+  // a stat shape - a Linkstrider healer stacks Charisma): +30 for a match, -30 for a different oath.
+  // Oathless is the absence of one and says nothing about the build, so it neither earns nor costs.
+  if (req.oath && req.oath !== "Oathless" && req.oath !== "None") score += a.oath?.[0]?.[0] === req.oath ? 30 : -30;
   score += Math.log10(Math.max(1, a.views_total ?? 1));
   return score;
 }
 
 // candidates with role === req.role (fallback: all); highest-scoring wins.
-export function selectArchetype(req, archetypes) {
+export function selectArchetype(req, archetypes, game = null) {
   let candidates = archetypes.filter(a => a.role === req.role);
   if (candidates.length === 0) candidates = archetypes;
+  const eff = effectiveRequest(req, game);
 
   let best = null, bestScore = -Infinity;
   for (const a of candidates) {
-    const s = scoreArchetype(req, a);
+    const s = scoreArchetype(eff, a);
     if (s > bestScore) { bestScore = s; best = a; }
   }
 
@@ -266,15 +282,44 @@ export function fitTo330(target, floor, priority, spread, stackStat) {
   return { final: out, raised };
 }
 
+// A talent plus every real (non-path) talent in its prerequisite chain, prerequisites first.
+export function prereqChain(name, game) {
+  const out = [], seen = new Set();
+  const visit = n => {
+    if (seen.has(n) || !game.talents[n] || n.startsWith("Oath: ") || n.startsWith("Murmur: ")) return;
+    seen.add(n);
+    for (const p of game.talents[n].pre ?? []) visit(resolveTalent(p, game) ?? p);
+    out.push(n);
+  };
+  visit(name);
+  return out;
+}
+
+// Pseudo stats resolve to the group member the target already favours (Mind -> the highest of
+// Int/Will/Cha, Body -> Str/Agi/Fort, Weapon -> the weapon stats, Attunement -> the attunements).
+// Power is always met at 330 points. Requirements above 100 are unreachable (joke items) and are
+// clamped so they can never push a stat past the cap.
+const PSEUDO = { Body: ["Strength", "Agility", "Fortitude"], Mind: ["Intelligence", "Willpower", "Charisma"], Weapon: WEAPON_STATS, Weapons: WEAPON_STATS, Attunement: ATTUNEMENTS };
 function applyReqs(reqs, target, mustMin) {
   for (const [k, v] of Object.entries(reqs ?? {})) {
-    if (IGNORE_REQ_KEYS.has(k)) continue;
-    const c = canon(k);
+    if (k === "Power") continue;
+    const val = Math.min(100, Number(v));
+    let c = canon(k);
+    if (!c && PSEUDO[k]) c = PSEUDO[k].reduce((best, st) => (target[st] ?? 0) > (target[best] ?? 0) ? st : best, PSEUDO[k][0]);
     if (!c) continue;
-    const val = Number(v);
     target[c] = Math.max(target[c] ?? 0, val);
     mustMin[c] = Math.max(mustMin[c] ?? 0, val);
   }
+}
+// A talent's full requirement: its top-level stats plus, when it carries `or` alternatives, the
+// alternative that costs the fewest extra points over the current target (the builder demands one).
+function applyTalentReqs(t, target, mustMin) {
+  if (!t) return;
+  applyReqs(t.reqs, target, mustMin);
+  const alts = (t.or ?? []).filter(a => Object.keys(a.reqs ?? {}).length);
+  if (!alts.length) return;
+  const cost = a => Object.entries(a.reqs).reduce((sum, [k, v]) => { const c = canon(k); return sum + (c ? Math.max(0, Math.min(100, Number(v)) - (target[c] ?? 0)) : 0); }, 0);
+  applyReqs(alts.sort((a, b) => cost(a) - cost(b))[0].reqs, target, mustMin);
 }
 
 export function planStats(req, archetype, game) {
@@ -345,7 +390,8 @@ export function planStats(req, archetype, game) {
   for (const tName of req.must_talents) {
     const resolved = resolveTalent(tName, game);
     if (!resolved) { notes.push(`unknown talent ${tName} ignored`); continue; }
-    applyReqs(game.talents[resolved]?.reqs, target, mustMinTalents);
+    // the talent AND its whole prerequisite chain (Ghost needs Swift Rebound, Evasive Expert, Risky Moves - each with its own stats)
+    for (const n of prereqChain(resolved, game)) applyTalentReqs(game.talents[n], target, mustMinTalents);
   }
   for (const mName of req.must_mantras) {
     const m = game.mantras[mName];
@@ -355,7 +401,7 @@ export function planStats(req, archetype, game) {
   // R2: the resolved oath (see resolveOath in assemble()) is a must-have exactly like a must talent -
   // its own stat reqs must raise target/mustMin so the plan actually reaches them, not just the
   // prerequisite talents pickTalents prioritizes for it below.
-  if (req.oath && req.oath !== "None") applyReqs(game.talents[`Oath: ${req.oath}`]?.reqs, target, mustMinOath);
+  if (req.oath && req.oath !== "None") applyTalentReqs(game.talents[`Oath: ${req.oath}`], target, mustMinOath);
   const mustMinWeapon = zeroFlat();
   if (reqWeapon) {
     applyReqs(reqWeapon.reqs, target, mustMinWeapon);
@@ -377,15 +423,23 @@ export function planStats(req, archetype, game) {
   if (pre) for (const s of ALL_STATS) if (target[s] > 0) pre[s] = Math.max(pre[s] ?? 0, 1);
 
   // 7. shrine: fit pre to the power-budget window, derive shrine base, raise target to meet it
-  const targetNoShrine = { ...target }; // kept so the shrine can be dropped in step 8 if it can't fit the request
+  const targetNoShrine = { ...target }; // kept so the shrine plan can be redone or dropped in step 8
+  const preSeeded = pre ? { ...pre } : null;
   let shrineBase = null, shrinePower = null;
-  if (pre) {
+  // `investMust`: put the request's hard requirements (its weapon, oath, must-haves) into the
+  // pre-shrine block so the Shrine of Order carries them into the base - what a real player does
+  // when a stat has to be there after shrining. Off for the first attempt (the archetype's own
+  // pre block), switched on by step 8 as the first relief when the plain plan doesn't fit.
+  const planShrine = investMust => {
+    pre = { ...preSeeded };
+    for (const s of ALL_STATS) target[s] = targetNoShrine[s];
     // R8: the budget power comes from the archetype's OWN pre-shrine block, not the cluster's modal
     // shrine power (which can be well above what this particular pre allocation actually reaches).
     const bpow = Math.max(8, Math.min(19, powerFor({ ...zeroFlat(), ...a.pre_shrine_modal })));
     const budget = pointsForPower(bpow);
     const floor = {};
     for (const s of ALL_STATS) floor[s] = Math.max(0, bonus[s] ?? 0, target[s] > 0 ? 1 : 0);
+    if (investMust) for (const s of ALL_STATS) if ((mustMin[s] ?? 0) > 0) { pre[s] = Math.max(pre[s] ?? 0, Math.min(100, mustMin[s])); floor[s] = Math.max(floor[s], Math.min(100, mustMin[s])); }
 
     pre = fitPreToBudget(pre, budget, floor, target, a.stack);
     const pts = pointsSpent(pre);
@@ -395,7 +449,8 @@ export function planStats(req, archetype, game) {
     shrineBase = shrineOfOrder(pre, bonus).base;
     for (const s of ALL_STATS) target[s] = Math.max(target[s] ?? 0, shrineBase[s] ?? 0);
     shrinePower = powerFor(pre);
-  }
+  };
+  if (pre) planShrine(false);
 
   // 8. fit final target to exactly 330 points
   const priority = new Set([a.stack.stat]);
@@ -412,14 +467,15 @@ export function planStats(req, archetype, game) {
     { label: "oath", src: mustMinOath },
     { label: "weapon", src: mustMinWeapon },
   ].filter(({ src }) => ALL_STATS.some(st => (src[st] ?? 0) > 0)); // only sources that actually add a floor
-  let useStackFloor = true, relaxedCount = 0;
+  let useStackFloor = true, relaxedCount = 0, investedMust = false;
+  const hasMust = ALL_STATS.some(st => (mustMin[st] ?? 0) > 0);
   const floor330For = () => {
     const floor330 = {};
     for (const st of ALL_STATS) {
       const stackFloor = useStackFloor && st === a.stack.stat ? Math.min(target[st] ?? 0, a.stack.modal - 25) : 0;
       let mustFloor = 0;
       for (let i = relaxedCount; i < sources.length; i++) mustFloor = Math.max(mustFloor, sources[i].src[st] ?? 0);
-      floor330[st] = Math.max(0, shrineBase?.[st] ?? 0, bonus[st] ?? 0, mustFloor, stackFloor);
+      floor330[st] = Math.min(100, Math.max(0, shrineBase?.[st] ?? 0, bonus[st] ?? 0, mustFloor, stackFloor));
     }
     return floor330;
   };
@@ -436,6 +492,7 @@ export function planStats(req, archetype, game) {
       fit = fitTo330(target, floor330For(), priority, a.post_shrine_spread, a.stack.stat);
       break;
     } catch (e) {
+      if (pre && hasMust && !investedMust) { investedMust = true; planShrine(true); notes.push("requirements invested before the shrine so the Shrine of Order carries them"); continue; }
       if (useStackFloor) { useStackFloor = false; notes.push(`${a.stack.stat} stack floor dropped to fit the request`); continue; }
       if (pre) { dropShrine(); notes.push("Shrine of Order dropped: the request's requirements don't fit under this archetype's shrine plan"); continue; }
       if (relaxedCount >= sources.length) throw new Error(`${a.id}: ${e.message}`);
@@ -498,7 +555,9 @@ export function pickTalents(req, archetype, coreDraft, game) {
 
   const seen = new Set();
   const candidates = [];
-  for (const n of [...oathPre, ...mustResolved, ...archetype.talent_freq.map(([x]) => x)]) {
+  // must talents come with their prerequisite chains (prerequisites first) so they can actually be taken
+  const mustWithChains = mustResolved.flatMap(n => prereqChain(n, game));
+  for (const n of [...oathPre, ...mustWithChains, ...archetype.talent_freq.map(([x]) => x)]) {
     const r = resolve(n);
     if (seen.has(r) || avoidSet.has(r)) continue;
     seen.add(r);
@@ -538,7 +597,7 @@ export function pickTalents(req, archetype, coreDraft, game) {
     for (const name of candidates) {
       if (takenSet.has(name) || excludesTaken(name)) continue;
       const cost = (counts(name) ? 1 : 0) + chainCost(name);
-      if (cost && countingTaken + cost > (mustSet.has(name) ? cap : target)) continue;
+      if (cost && countingTaken + cost > (mustSet.has(name) || mustWithChains.includes(name) ? cap : target)) continue;
       if (talentObtainable(name, { ...coreDraft, talents: taken }, game).ok) {
         takenSet.add(name); taken.push(name); changed = true;
         if (counts(name)) countingTaken++;
@@ -938,7 +997,7 @@ function resolveOath(req, archetype, game) {
 
 export function assemble(partialRequest, archetypes, game) {
   const req = normalizeRequest(partialRequest);
-  const { archetype, adapted } = selectArchetype(req, archetypes);
+  const { archetype, adapted } = selectArchetype(req, archetypes, game);
   const { oath: resolvedOath, note: oathNote } = resolveOath(req, archetype, game);
   req.oath = resolvedOath;
   const plan = planStats(req, archetype, game);
