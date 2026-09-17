@@ -94,6 +94,24 @@ test("kits are player-sized: every default build respects the talent budget and 
   }
 });
 
+test("gear carries real stars and pips; weapons carry stars (DMG%/PEN%) and an enchant", () => {
+  const PIPS = new Set(["Health", "Ether", "Physical Armor", "Posture", "Sanity", "Anchor", "Elemental Armor"]);
+  for (const a of A) {
+    const b = assemble({ role: a.role, oath: a.oath[0]?.[0] ?? null }, [a], game);
+    const items = [...Object.entries(b.equipment).filter(([k]) => k !== "Rings").map(([, v]) => v), ...(b.equipment.Rings ?? [])].filter(Boolean);
+    for (const it of items) {
+      assert.ok([2, 3].includes(it.qualityStars), `${a.id}: ${it.name} stars ${it.qualityStars}`);
+      assert.ok(it.pips.length >= 1, `${a.id}: ${it.name} has no pips`);
+      for (const p of it.pips) assert.ok(PIPS.has(p.stat) && p.rarity, `${a.id}: ${it.name} pip ${JSON.stringify(p)}`);
+    }
+    if (b.weapon) {
+      assert.ok(["DMG%", "PEN%"].includes(b.weaponStars?.mod) && b.weaponStars.count === 3, `${a.id}: weaponStars ${JSON.stringify(b.weaponStars)}`);
+      assert.ok(b.enchant, `${a.id}: no enchant for ${b.weapon}`);
+      assert.deepEqual(b.draft.weaponStars, b.weaponStars);
+    }
+  }
+});
+
 test("R7: fitTo330 relaxes an unfit oath floor instead of throwing", () => {
   // The attunementless tank medoid's shrine-pinned floor (307 of 330) leaves no room for Oath:
   // Visionshaper's Charisma 50. An explicit oath is honoured as-is (R2), so planStats must relax the

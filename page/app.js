@@ -246,13 +246,27 @@ function render(b) {
   }
 
   // gear & path
-  const kv = [["Weapon", b.weapon || "—"], ["Enchant", b.enchant || "—"], ["Outfit", b.outfit || "—"],
+  const stars = n => "★".repeat(Number(n) || 0);
+  const pipText = pips => {
+    const c = new Map(); for (const p of pips ?? []) c.set(p.stat, (c.get(p.stat) ?? 0) + 1);
+    return [...c.entries()].map(([k, v]) => v > 1 ? `${k} ×${v}` : k).join(", ");
+  };
+  const weaponText = b.weapon
+    ? `${b.weapon}${b.weaponStars?.count ? ` · ${stars(b.weaponStars.count)} ${b.weaponStars.mod}` : ""}${b.enchant ? ` · ${b.enchant} enchant` : ""}`
+    : "—";
+  const kv = [["Weapon", weaponText], ["Outfit", b.outfit || "—"],
     ["Oath", b.oath || "None"], ["Origin", b.origin || "—"], ["Race", b.race || "None"], ["Murmur", b.murmur || "None"], ["Bell", b.bell || "None"],
-    ["Boons", (b.boons ?? []).join(", ") || "—"], ["Flaws", (b.flaws ?? []).join(", ") || "—"],
+    ["Boons", (b.boons ?? []).filter(x => x && x !== "None").join(", ") || "—"], ["Flaws", (b.flaws ?? []).filter(x => x && x !== "None").join(", ") || "—"],
     ["Traits", Object.entries(b.traits ?? {}).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(", ") || "—"]];
   for (const [slot, item] of Object.entries(b.equipment ?? {})) {
-    const names = (Array.isArray(item) ? item : [item]).filter(Boolean).map(x => x.name).filter(Boolean);
-    if (names.length) kv.push([slot, names.join(", ")]);
+    const items = (Array.isArray(item) ? item : [item]).filter(x => x?.name);
+    if (!items.length) continue;
+    // same pip roll on every item of a slot -> say it once
+    const rolls = new Set(items.map(x => `${x.qualityStars}|${pipText(x.pips)}`));
+    const text = rolls.size === 1
+      ? `${items.map(x => x.name).join(", ")} · ${stars(items[0].qualityStars)}${pipText(items[0].pips) ? ` ${pipText(items[0].pips)}` : ""}`
+      : items.map(x => `${x.name} ${stars(x.qualityStars)} ${pipText(x.pips)}`).join("; ");
+    kv.push([slot, text]);
   }
   $("gear").replaceChildren(...kv.flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: v })]));
 

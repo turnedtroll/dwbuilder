@@ -696,16 +696,30 @@ function pickOutfit(archetype, origin, final, game) {
   return "None";
 }
 
+// Each item gets the stars and pip stats the archetype's members actually roll in that slot
+// (gear_pips: modal 3-star signature per slot) - Health/Physical Armor on head and arms, Ether on
+// face and earrings, Health/Posture on rings ... - not bare names with empty pips.
+const DEFAULT_PIPS = {
+  Head: [["Health", "Rare"], ["Health", "Rare"], ["Physical Armor", "Rare"]], Arms: [["Health", "Rare"], ["Health", "Rare"], ["Physical Armor", "Rare"]],
+  Legs: [["Health", "Rare"], ["Health", "Rare"], ["Health", "Rare"]], Torso: [["Health", "Rare"], ["Health", "Rare"], ["Health", "Rare"]],
+  Face: [["Ether", "Rare"], ["Ether", "Rare"], ["Ether", "Rare"]], Earrings: [["Ether", "Rare"], ["Ether", "Rare"], ["Ether", "Rare"]],
+  Rings: [["Health", "Rare"], ["Health", "Rare"], ["Posture", "Rare"]],
+};
+function itemFor(name, slot, archetype) {
+  const sig = archetype.gear_pips?.[slot];
+  const pips = (sig?.pips ?? DEFAULT_PIPS[slot] ?? []).map(([stat, rarity]) => ({ stat, rarity }));
+  return { name, qualityStars: sig?.stars ?? 3, pips, enchant: "" };
+}
 function pickEquipment(archetype) {
   const equipment = {};
   for (const slot of EQUIP_SLOTS) {
     const top = archetype.equipment?.[slot]?.[0]?.[0];
-    equipment[slot] = top ? { name: top, qualityStars: 3, pips: [], enchant: "" } : null;
+    equipment[slot] = top ? itemFor(top, slot, archetype) : null;
   }
   const rings = archetype.equipment?.Rings ?? [];
   equipment.Rings = [0, 1, 2, 3].map(i => {
     const name = rings[i]?.[0];
-    return name ? { name, qualityStars: 3, pips: [], enchant: "" } : null;
+    return name ? itemFor(name, "Rings", archetype) : null;
   });
   return equipment;
 }
@@ -725,9 +739,11 @@ export function pickGear(req, archetype, coreDraft, game) {
   const final = coreDraft.final;
   const outfit = pickOutfit(archetype, origin, final, game);
   const weapon = pickWeapon(req, archetype, final, game);
-  const enchant = weapon ? (archetype.enchants?.[0]?.[0] ?? "") : "";
+  const enchant = weapon ? (archetype.enchants?.[0]?.[0] || "Astral") : "";
+  // Weapon stars: 3 of the mod the archetype's members roll (DMG% or PEN%).
+  const weaponStars = weapon ? { count: 3, mod: archetype.weapon_stars?.mod ?? "DMG%" } : { count: 0, mod: "" };
   const equipment = pickEquipment(archetype);
-  return { outfit, weapon, enchant, equipment, boons, flaws, traits, murmur, bell, origin, oath };
+  return { outfit, weapon, enchant, weaponStars, equipment, boons, flaws, traits, murmur, bell, origin, oath };
 }
 
 function talentUnlocks(build, game, before, after) {
@@ -906,7 +922,7 @@ export function assemble(partialRequest, archetypes, game) {
   const core = {
     name, description, notes,
     origin: gear.origin, oath: gear.oath, race: plan.race, murmur: gear.murmur, bell: gear.bell,
-    outfit: gear.outfit, weapon: gear.weapon, enchant: gear.enchant,
+    outfit: gear.outfit, weapon: gear.weapon, enchant: gear.enchant, weaponStars: gear.weaponStars,
     boons: gear.boons, flaws: gear.flaws, traits: gear.traits,
     multifaceted: plan.multifaceted, shrine, preShrine: plan.preShrine, final: plan.final,
     talents: talentsResult.talents, mantras: mantrasResult.mantras, mantraMods: mantrasResult.mantraMods,

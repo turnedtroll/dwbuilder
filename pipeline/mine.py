@@ -72,6 +72,7 @@ def load():
 
 # Chime (of Conflict) builds are an intent players tag themselves. Boss raid is Deepwoken slang for
 # a self-sufficient hybrid - good health, good damage AND healing - so it is a stat/kit signature.
+GLOBAL_ENCHANT, GLOBAL_STAR_MOD = {}, {}  # per weapon type, filled in main() from the whole corpus
 INTENT_TAGS = {"pvp: chime": "chime"}
 INTENT_ROLES = ("chime",)
 HEAL_MANTRAS = {"Graceful Flame", "Command: Live", "Symbiotic Sustain", "Alsin's Aid", "Rally", "Parasitic Leech", "Shade Devour"}
@@ -97,7 +98,7 @@ def prep(b):
             "talents": [t for t in b["talents"] if not t.startswith(("Oath: ", "Murmur: "))], "mantras": b["mantras"],
             "mods": b.get("content", {}).get("mantraModifications", {}) or {}, "oath": meta.get("Oath", "None"), "origin": meta.get("Origin"),
             "race": meta.get("Race"), "murmur": meta.get("Murmur"), "bell": meta.get("Bell"), "outfit": meta.get("Outfit"),
-            "weapon": b.get("weapons") or "", "enchant": b.get("enchant") or "", "wtype": WTYPE[top_w] if final[top_w] >= 40 else "none",
+            "weapon": b.get("weapons") or "", "enchant": b.get("enchant") or "", "weapon_stars": b.get("weaponStars") or {}, "wtype": WTYPE[top_w] if final[top_w] >= 40 else "none",
             "atts": tuple(a for a in ATT if final[a] >= 40), "equipment": b.get("equipment") or {},
             "boons": [b["stats"].get("boon1"), b["stats"].get("boon2")], "flaws": [b["stats"].get(f"flaw{i}") for i in (1, 2, 3)],
             "traits": b["stats"].get("traits") or {}, "multifaceted": bool(b.get("multifaceted"))}
@@ -170,7 +171,26 @@ def summarize(key, members, game, resolve):
             for item in (v if isinstance(v, list) else [v]):
                 if isinstance(item, dict) and item.get("name"): c[item["name"]] += 1
         equip[slot] = freq(c, 6, n)
+    # Stars and pips per slot: the most common exact pip signature among members' 3-star items in
+    # that slot (fallback: any stars), so gear comes with the stats real builds roll on it.
+    gear_pips = {}
+    for slot in ("Head", "Arms", "Legs", "Torso", "Face", "Earrings", "Rings"):
+        sigs = Counter()
+        for m in members:
+            v = m["equipment"].get(slot)
+            for item in (v if isinstance(v, list) else [v]):
+                if not isinstance(item, dict) or not item.get("name"): continue
+                pips = tuple((p.get("stat"), p.get("rarity") or "Rare") for p in (item.get("pips") or []) if p.get("stat"))
+                if pips: sigs[(int(item.get("qualityStars") or 0), pips)] += 1
+        if not sigs: continue
+        three = Counter({k: v for k, v in sigs.items() if k[0] == 3})
+        stars, pips = (three or sigs).most_common(1)[0][0]
+        gear_pips[slot] = {"stars": stars or 3, "pips": [list(p) for p in pips]}
+    star_mods = Counter((m["weapon_stars"] or {}).get("mod") for m in members if (m["weapon_stars"] or {}).get("mod") in ("DMG%", "PEN%"))
+    weapon_stars = {"count": 3, "mod": star_mods.most_common(1)[0][0] if star_mods else GLOBAL_STAR_MOD.get(key[1], "DMG%")}
     role, wtype = key[0], key[1]
+    enchants = freq(Counter(m["enchant"] for m in members), 5, n)
+    if not enchants and GLOBAL_ENCHANT.get(wtype): enchants = [[GLOBAL_ENCHANT[wtype], 0.0]]  # nobody in the cluster set one; the weapon type's usual pick
     atts = key[2] if len(key) > 2 else tuple(a for a in ATT if post_modal_old[a] >= 40)
     # Fallback-level clusters (oath not in the key) mix oaths; the stat block is the medoid's, so the
     # medoid's oath is the only one guaranteed coherent with it -> it names the archetype and leads
@@ -190,8 +210,8 @@ def summarize(key, members, game, resolve):
         "oath": oath_freq, "origin": freq(Counter(m["origin"] for m in members), 5, n),
         "race": freq(Counter(m["race"] for m in members), 5, n), "murmur": freq(Counter(m["murmur"] for m in members), 3, n),
         "bell": freq(Counter(m["bell"] for m in members), 3, n), "outfits": freq(Counter(m["outfit"] for m in members), 6, n),
-        "weapons": freq(Counter(m["weapon"] for m in members), 8, n), "enchants": freq(Counter(m["enchant"] for m in members), 5, n),
-        "equipment": equip, "boons": freq(Counter(b for m in members for b in m["boons"]), 4, n), "flaws": freq(Counter(f for m in members for f in m["flaws"]), 5, n),
+        "weapons": freq(Counter(m["weapon"] for m in members), 8, n), "enchants": enchants,
+        "equipment": equip, "gear_pips": gear_pips, "weapon_stars": weapon_stars, "boons": freq(Counter(b for m in members for b in m["boons"]), 4, n), "flaws": freq(Counter(f for m in members for f in m["flaws"]), 5, n),
         "traits_modal": {t: modal([int(m["traits"].get(t, 0) or 0) for m in members]) for t in ("Vitality", "Erudition", "Proficiency", "Songchant")},
         "multifaceted_rate": round(sum(m["multifaceted"] for m in members) / n, 3),
     }
@@ -203,6 +223,12 @@ def main():
     raw = load()
     kept = [prep(b) for b in raw if b["stats"].get("pointSpent") == 330 and b["meta"].get("views", 0) >= MIN_VIEWS and b["talents"]]
     for x in kept: x["role"] = role_of({"mantras": x["mantras"]}, x["final"], x["talents"], x["oath"])
+    GLOBAL_ENCHANT["none"] = Counter(x["enchant"] for x in kept if x["enchant"]).most_common(1)[0][0]  # any weapon type
+    for wt in ("light", "medium", "heavy"):
+        ench = Counter(x["enchant"] for x in kept if x["wtype"] == wt and x["enchant"])
+        if ench: GLOBAL_ENCHANT[wt] = ench.most_common(1)[0][0]
+        mods = Counter((x["weapon_stars"] or {}).get("mod") for x in kept if x["wtype"] == wt and (x["weapon_stars"] or {}).get("mod") in ("DMG%", "PEN%"))
+        if mods: GLOBAL_STAR_MOD[wt] = mods.most_common(1)[0][0]
     # Intent roles from the authors' own tags: a "pve: boss" build also joins the bossraid clusters,
     # a "pvp: chime" build the chime clusters (on top of its stat-shape role above).
     kept += [dict(x, role=r) for x in kept for r in INTENT_ROLES if r in x["intent"]] + [dict(x, role="bossraid") for x in kept if is_bossraid(x, resolve)]

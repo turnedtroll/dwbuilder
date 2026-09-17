@@ -66,6 +66,19 @@ class Mine(unittest.TestCase):
             self.assertTrue(20 <= b["talents"] <= 76, x["id"])
             self.assertLessEqual(b["talents"], 52 + (12 - b["mantras"]) * 2 + 6, x["id"])  # medians of real builds sit near the cap
 
+    def test_gear_stars_and_pips(self):
+        # Gear comes with the stars and pip stats real builds put on it (Health/Physical Armor on head and
+        # arms, Ether on face/earrings ...), weapon stars carry DMG%/PEN%, and a weapon always has an enchant.
+        PIPS = {"Health", "Ether", "Physical Armor", "Posture", "Sanity", "Anchor", "Elemental Armor"}
+        for x in self.a["archetypes"]:
+            for slot, sig in x["gear_pips"].items():
+                self.assertIn(slot, ("Head", "Arms", "Legs", "Torso", "Face", "Earrings", "Rings"), x["id"])
+                self.assertTrue(sig["stars"] in (2, 3) and 1 <= len(sig["pips"]) <= 6, (x["id"], slot, sig))
+                for stat, rarity in sig["pips"]: self.assertIn(stat, PIPS, (x["id"], slot, stat))
+            self.assertIn(x["weapon_stars"]["mod"], ("DMG%", "PEN%"), x["id"])
+            self.assertEqual(x["weapon_stars"]["count"], 3, x["id"])
+            if x["weapons"]: self.assertTrue(x["enchants"] and x["enchants"][0][0], x["id"])
+
     def test_pointsmath(self):
         from mine import points_spent, power_for
         self.assertEqual(points_spent({"Charisma": 90, "Flamecharm": 1, "Thundercall": 1, "Frostdraw": 1}), 91)

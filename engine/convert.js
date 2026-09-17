@@ -66,6 +66,7 @@ export function toDraft(core) {
   s.buildName = core.name; s.buildDescription = core.description; d.content.notes = core.notes;
   Object.assign(s.meta, { Origin: core.origin || "Castaway", Oath: core.oath || "None", Race: core.race || "None", Murmur: core.murmur || "None", Bell: core.bell || "None", Outfit: core.outfit || "None" });
   d.weapons = core.weapon || ""; d.enchant = core.enchant || ""; d.multifaceted = !!core.multifaceted;
+  if (core.weaponStars) d.weaponStars = { count: Number(core.weaponStars.count ?? 0), mod: core.weaponStars.mod ?? "" };
   [s.boon1, s.boon2] = [core.boons?.[0] || "None", core.boons?.[1] || "None"];
   [s.flaw1, s.flaw2, s.flaw3] = [core.flaws?.[0] || "None", core.flaws?.[1] || "None", core.flaws?.[2] || "None"];
   for (const t of TRAITS) s.traits[t] = Number(core.traits?.[t] ?? 0);
