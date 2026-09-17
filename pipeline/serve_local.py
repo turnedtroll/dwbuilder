@@ -8,7 +8,7 @@ into out/site/ and serves that on http://localhost:8080/.
 
 Usage: python pipeline/serve_local.py [--port 8080] [--no-serve]
 """
-import argparse, glob, http.server, os, shutil, functools
+import argparse, glob, http.server, os, re, shutil, functools, subprocess, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE = os.path.join(ROOT, "out", "site")
@@ -48,11 +48,27 @@ def wrap_fragment(fragment):
     return SKELETON.format(head=nl.join(l for l in head if l.strip()), body=nl.join(body))
 
 
+def version_tag():
+    """Short git commit hash (or a timestamp): stamped onto every script/style/import URL so a
+    fresh deploy is never served from a browser's or GitHub Pages' 10-minute cache."""
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
+    except Exception:
+        return str(int(time.time()))
+
+
+def stamp_js(src, tag):
+    # relative ES-module imports: from "./x.js" / import "./x.js" -> "./x.js?v=<tag>"
+    pattern = r"""((?:from|import)\s*["'])(\.{1,2}/[^"']+?\.js)(["'])"""
+    return re.sub(pattern, lambda m: f"{m.group(1)}{m.group(2)}?v={tag}{m.group(3)}", src)
+
+
 def build_site():
+    tag = version_tag()
     shutil.rmtree(SITE, ignore_errors=True)
     shutil.copytree(os.path.join(ROOT, "page"), SITE)
     with open(os.path.join(ROOT, "page", "index.html"), encoding="utf-8") as f:
-        fragment = f.read()
+        fragment = f.read().replace('href="styles.css"', f'href="styles.css?v={tag}"').replace('src="app.js"', f'src="app.js?v={tag}"')
     with open(os.path.join(SITE, "index.html"), "w", encoding="utf-8") as f:
         f.write(wrap_fragment(fragment))
     open(os.path.join(SITE, ".nojekyll"), "w").close()  # GitHub Pages: serve files as-is
@@ -61,6 +77,9 @@ def build_site():
         shutil.copy(f, os.path.join(SITE, "engine"))
     for name in ("game.js", "archetypes.js"):
         shutil.copy(os.path.join(ROOT, "data", name), os.path.join(SITE, "data"))
+    for f in [os.path.join(SITE, "app.js"), *glob.glob(os.path.join(SITE, "engine", "*.js"))]:
+        with open(f, encoding="utf-8") as fh: src = fh.read()
+        with open(f, "w", encoding="utf-8") as fh: fh.write(stamp_js(src, tag))
     return SITE
 
 
