@@ -1,0 +1,201 @@
+<title>Deepwoken Forge</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="styles.css">
+
+<div class="wrap">
+  <header class="masthead">
+    <h1>Deepwoken <span>Forge</span></h1>
+    <p>Meta-derived builds from 880 published Deepwoken builds. Pick a role, forge, then import into deepwoken.co.</p>
+  </header>
+
+  <div id="error-banner" class="banner" hidden role="alert"></div>
+
+  <div class="layout">
+    <form class="form" id="request-form" autocomplete="off">
+      <fieldset>
+        <legend>Role</legend>
+        <div class="field">
+          <label for="role">Role</label>
+          <select id="role">
+            <option value="dps">DPS</option>
+            <option value="healer">Healer</option>
+            <option value="tank">Tank</option>
+            <option value="mage">Mage</option>
+            <option value="hybrid">Hybrid</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Attunements</legend>
+        <div class="field">
+          <span class="label">Include</span>
+          <div class="chips" id="att-include"></div>
+        </div>
+        <div class="field">
+          <span class="label">Exclude</span>
+          <div class="chips" id="att-exclude"></div>
+        </div>
+        <div class="field inline">
+          <input type="checkbox" id="attunementless">
+          <label for="attunementless">Attunementless</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Weapon</legend>
+        <div class="row">
+          <div class="field">
+            <label for="weapon-type">Weapon type</label>
+            <select id="weapon-type">
+              <option value="">auto</option>
+              <option value="light">Light</option>
+              <option value="medium">Medium</option>
+              <option value="heavy">Heavy</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+          <div class="field" id="weapon-field">
+            <label for="weapon">Weapon</label>
+            <input type="text" id="weapon" list="weapon-list" placeholder="auto">
+            <datalist id="weapon-list"></datalist>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Path</legend>
+        <div class="row">
+          <div class="field">
+            <label for="oath">Oath</label>
+            <select id="oath"><option value="">auto</option></select>
+          </div>
+          <div class="field">
+            <label for="origin">Origin</label>
+            <select id="origin"><option value="">auto</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="race">Race</label>
+            <select id="race"><option value="">auto</option></select>
+          </div>
+          <div class="field">
+            <span class="label">Shrine</span>
+            <div class="field inline"><input type="checkbox" id="shrine" checked><label for="shrine">Shrine of Order</label></div>
+            <div class="field inline"><input type="checkbox" id="multifaceted"><label for="multifaceted">Multifaceted</label></div>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Talents &amp; mantras</legend>
+        <div class="field">
+          <label for="must-talents-input">Must have talents</label>
+          <div class="chips" id="must-talents"></div>
+          <input type="text" id="must-talents-input" list="talent-list" placeholder="Type a talent and press Enter">
+          <div class="hint" id="must-talents-hint"></div>
+        </div>
+        <div class="field">
+          <label for="avoid-talents-input">Avoid talents</label>
+          <div class="chips" id="avoid-talents"></div>
+          <input type="text" id="avoid-talents-input" list="talent-list" placeholder="Type a talent and press Enter">
+          <div class="hint" id="avoid-talents-hint"></div>
+        </div>
+        <div class="field">
+          <label for="must-mantras-input">Must have mantras</label>
+          <div class="chips" id="must-mantras"></div>
+          <input type="text" id="must-mantras-input" list="mantra-list" placeholder="Type a mantra and press Enter">
+          <div class="hint" id="must-mantras-hint"></div>
+        </div>
+        <div class="field">
+          <label for="avoid-mantras-input">Avoid mantras</label>
+          <div class="chips" id="avoid-mantras"></div>
+          <input type="text" id="avoid-mantras-input" list="mantra-list" placeholder="Type a mantra and press Enter">
+          <div class="hint" id="avoid-mantras-hint"></div>
+        </div>
+        <datalist id="talent-list"></datalist>
+        <datalist id="mantra-list"></datalist>
+      </fieldset>
+
+      <fieldset>
+        <legend>Notes</legend>
+        <div class="field">
+          <label for="free-text">Playstyle notes (used by Refine with AI)</label>
+          <textarea id="free-text" placeholder="e.g. I want to poke with a spear and stay at range"></textarea>
+        </div>
+      </fieldset>
+
+      <button type="submit" class="primary" id="generate">Forge build</button>
+    </form>
+
+    <article class="build" id="build-view" aria-live="polite">
+      <div class="build-header" id="build-header">
+        <div class="eyebrow"><span id="build-role">—</span><span id="build-auto" hidden>auto</span><span id="build-based">—</span></div>
+        <h2 id="build-name">Forging…</h2>
+        <p class="desc" id="build-desc"></p>
+        <div class="header-line">
+          <span class="badge" id="build-score">—</span>
+          <span id="build-breakdown" class="hint"></span>
+          <span class="examples" id="build-examples"></span>
+        </div>
+      </div>
+
+      <div class="actions" id="action-bar">
+        <button type="button" class="ghost" id="copy-code">Copy build code</button>
+        <a class="ghost" id="bookmarklet" href="#" draggable="true" title="Drag me to your bookmarks bar">Import bookmarklet</a>
+        <button type="button" class="ghost" id="ai-refine" hidden>Refine with AI</button>
+        <button type="button" class="ghost" id="save-library" hidden>Save to library</button>
+        <button type="button" class="ghost" id="library-tab" hidden>Library</button>
+        <span class="spacer"></span>
+        <span class="toast" id="toast" hidden></span>
+      </div>
+
+      <section id="warnings-section">
+        <h3>Validation</h3>
+        <div class="issues" id="warnings"></div>
+      </section>
+
+      <section>
+        <h3>Leveling guide</h3>
+        <div class="guide" id="guide"></div>
+      </section>
+
+      <section>
+        <h3>Stats</h3>
+        <div class="table-wrap"><table id="stats-table"></table></div>
+        <div class="figures" id="figures"></div>
+      </section>
+
+      <section>
+        <h3>Talents</h3>
+        <div id="talents"></div>
+      </section>
+
+      <section>
+        <h3>Mantras</h3>
+        <div class="pills" id="mantras"></div>
+      </section>
+
+      <section>
+        <h3>Gear &amp; path</h3>
+        <dl class="kv" id="gear"></dl>
+      </section>
+
+      <section>
+        <h3>Import into deepwoken.co</h3>
+        <div class="bookmarklet">
+          <ol>
+            <li>Drag the <b>Import bookmarklet</b> link above to your bookmarks bar.</li>
+            <li>Open <a href="https://deepwoken.co/builder" target="_blank" rel="noopener">deepwoken.co/builder</a>.</li>
+            <li>Click the bookmark and paste the build code.</li>
+          </ol>
+          <label for="build-code" class="hint">Build code (also copied by the button above)</label>
+          <textarea id="build-code" readonly spellcheck="false"></textarea>
+        </div>
+      </section>
+    </article>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
