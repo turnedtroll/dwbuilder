@@ -19,10 +19,25 @@ def reqs_of(obj):
     return {k: int(v) for k, v in (r.get("stats") or {}).items() if isinstance(v, (int, float))}
 
 def or_block(req):
+    req = req or {}
+    top_reqs = {k: int(v) for k, v in (req.get("stats") or {}).items()}
+    top_pre = list(req.get("talents") or [])
+    top_origin, top_outfit = req.get("origin"), req.get("outfit")
     out = []
-    for alt in (req or {}).get("or") or []:
-        out.append({"reqs": {k: int(v) for k, v in (alt.get("stats") or {}).items()}, "pre": list(alt.get("talents") or []),
-                    "origin": alt.get("origin"), "outfit": alt.get("outfit")})
+    for alt in req.get("or") or []:
+        # one raw entry (Jus Karita) nests its origin requirement one level deeper, inside its own
+        # "or": [{"origin": ...}] rather than directly on the alternative - fall back to that if present.
+        nested = (alt.get("or") or [{}])[0]
+        reqs = {k: int(v) for k, v in (alt.get("stats") or {}).items()}
+        pre = list(alt.get("talents") or [])
+        origin, outfit = alt.get("origin") or nested.get("origin"), alt.get("outfit") or nested.get("outfit")
+        # A "bare" alternative (Armor Piercing's weaponType-only or-list; the "*Weapons Unbounded"
+        # quest/slay-gated or-list; ...) carries nothing of its own beyond an unmodelable extra gate
+        # (a quest, a mantra, a boss kill) we can't check - it's meant to layer onto the talent's own
+        # top-level reqs/pre/origin/outfit, not replace them with an unconditional free pass.
+        if not (reqs or pre or origin or outfit):
+            reqs, pre, origin, outfit = dict(top_reqs), list(top_pre), top_origin, top_outfit
+        out.append({"reqs": reqs, "pre": pre, "origin": origin, "outfit": outfit, "weaponType": alt.get("weaponType")})
     return out
 
 def wtype(w):

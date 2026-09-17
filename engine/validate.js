@@ -59,19 +59,51 @@ export function talentObtainable(name, core, game) {
   const resolved = resolveTalent(name, game);
   const t = resolved ? game.talents[resolved] : null;
   if (!t) return { ok: false, why: ["unknown"] };
-  const have = new Set([...core.talents.map(x => resolveTalent(x, game) ?? x), ...grantedTalents(core, game)]);
+  // Path entries ("Oath: X" / "Murmur: X") are never in core.talents (they're not pickable
+  // mantras/talents in the usual sense), but Oath: Contractor lists itself as a prerequisite -
+  // treat the build's own oath/murmur as "had" so that self-reference resolves instead of
+  // permanently failing.
+  const have = new Set([...core.talents.map(x => resolveTalent(x, game) ?? x), ...grantedTalents(core, game), `Oath: ${core.oath}`, `Murmur: ${core.murmur}`]);
   const why = [];
-  const alt = [{ reqs: t.reqs, pre: t.pre, origin: t.origin, outfit: t.outfit, alt: t.alt }, ...(t.or ?? [])];
-  const anyAlt = alt.some(a => phaseOk(a.reqs ?? {}, core) && (a.alt || ((a.pre ?? []).every(p => have.has(p)) && (!a.origin || a.origin === core.origin))));
+  // Most weaponType requirements are a single blanket field (t.weaponType) that applies no matter
+  // which `or` alternative is used. One talent (Armor Piercing: Greatcannon/Pistol/Rifle) instead
+  // carries a *different* weaponType per alternative and no blanket one - so weaponType is checked
+  // per-alt here (falling back to the blanket t.weaponType when an alt doesn't specify its own),
+  // not as a separate unconditional check.
+  const or = t.or ?? [];
+  // The top-level fields are themselves a genuine, independent alternative (see Execution: Light
+  // Weapon 90 + Pistol is one of 3 equally-valid paths) UNLESS they contribute nothing that
+  // distinguishes them from the `or` list, in which case including them would silently create an
+  // unintended free pass: either the top level is completely empty (Jus Karita - the whole
+  // requirement lives in `or`, there is no talent-wide default), or every `or` alternative carries
+  // its own weaponType while the top level has none (Armor Piercing - the top-level reqs merge into
+  // every alternative already via slimdata.py's or_block, so keeping a weaponType-free "primary"
+  // around would wrongly accept any weapon type).
+  const primaryEmpty = !Object.keys(t.reqs ?? {}).length && !(t.pre ?? []).length && !t.origin && !t.outfit;
+  const primaryUnconstrainedWeapon = !t.weaponType && or.some(a => a.weaponType);
+  const skipPrimary = or.length > 0 && (primaryEmpty || primaryUnconstrainedWeapon);
+  const alt = skipPrimary ? [...or] : [{ reqs: t.reqs, pre: t.pre, origin: t.origin, outfit: t.outfit, alt: t.alt, weaponType: t.weaponType }, ...or];
+  const altWeaponOk = a => weaponTypeOk({ weaponType: a.weaponType ?? t.weaponType }, core, game);
+  const anyAlt = alt.some(a => phaseOk(a.reqs ?? {}, core) && altWeaponOk(a) && (a.alt || ((a.pre ?? []).every(p => have.has(p)) && (!a.origin || a.origin === core.origin))));
+  const raceOk = !t.aspect || t.aspect === core.race;
+  const oathOk = t.rarity !== "Oath" || t.category === core.oath;
   if (!anyAlt) {
-    if (!phaseOk(t.reqs, core)) why.push(`needs ${Object.entries(t.reqs).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+    // Best-effort diagnostic text from the top-level fields; when skipPrimary is true (the real
+    // requirement lives entirely in `or`, e.g. Jus Karita's per-alt origin) these are uninformative,
+    // so `ok` below is derived from anyAlt directly rather than from why.length - a talent must never
+    // read as obtainable just because we couldn't articulate which alternative it failed.
+    if (Object.keys(t.reqs ?? {}).length && !phaseOk(t.reqs, core)) why.push(`needs ${Object.entries(t.reqs).map(([k, v]) => `${k} ${v}`).join(", ")}`);
     for (const p of t.pre ?? []) if (!have.has(p)) why.push(`needs talent ${p}`);
     if (t.origin && t.origin !== core.origin) why.push(`needs origin ${t.origin}`);
+    if (!alt.some(altWeaponOk)) {
+      const wanted = [...new Set(alt.map(a => a.weaponType ?? t.weaponType).filter(Boolean))];
+      if (wanted.length) why.push(`needs weapon type ${wanted.join(" or ")}`);
+    }
+    if (!why.length) why.push("requirements not met");
   }
-  if (t.aspect && t.aspect !== core.race) why.push(`needs race ${t.aspect}`);
-  if (t.rarity === "Oath" && t.category !== core.oath) why.push(`needs oath ${t.category}`);
-  if (!weaponTypeOk(t, core, game)) why.push(`needs weapon type ${t.weaponType}`);
-  return { ok: why.length === 0, why };
+  if (!raceOk) why.push(`needs race ${t.aspect}`);
+  if (!oathOk) why.push(`needs oath ${t.category}`);
+  return { ok: anyAlt && raceOk && oathOk, why };
 }
 
 export function mantraSlots(core, game) {
@@ -117,6 +149,15 @@ export function validate(core, game) {
       for (const s of ALL_STATS) if (core.final[s] < base[s]) warn("shrine_base", `${s}: final ${core.final[s]} < shrine base ${base[s]}`);
       if (powerFor(core.preShrine) < 8) warn("shrine_power_low", `shrining at power ${powerFor(core.preShrine)}`);
     }
+  }
+  // "Oath: <name>" is itself a talent entry (rarity Oath) with real reqs/pre in game.json (e.g. Oath:
+  // Blindseer needs Willpower 40 + 3 prerequisite talents), but the per-talent loop below skips every
+  // "Oath: "/"Murmur: " path entry outright (isPath) - so nothing ever checked the oath's own
+  // requirements. Reuse talentObtainable directly; its rarity==="Oath" category check is a no-op here
+  // since core.oath is by definition the requested oath's own category.
+  if (core.oath && core.oath !== "None" && game.talents[`Oath: ${core.oath}`]) {
+    const r = talentObtainable(`Oath: ${core.oath}`, core, game);
+    if (!r.ok) err("oath_reqs", `${core.oath}: ${r.why.join("; ")}`);
   }
   const seen = new Set();
   const seenResolved = new Set();

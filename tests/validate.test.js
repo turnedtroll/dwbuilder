@@ -68,6 +68,65 @@ test("talent_weapon_type: Shield-requiring talent with no weapon is a hard error
   assert.ok(!rWithShield.errors.some(e => e.code === "talent_weapon_type"), JSON.stringify(rWithShield.errors));
 });
 
+test("talent_weapon_type: per-alternative weaponType (Armor Piercing: Greatcannon/Pistol/Rifle) is enforced, not just the top-level field", () => {
+  // Armor Piercing has no top-level weaponType - each `or` alternative carries its own (data/raw/gamedata.json).
+  // Real build dps-heavy-jetstriker (out/builds) surfaced this live: our validator missed it because slimdata.py's
+  // or_block() dropped per-alternative weaponType, so talentObtainable never saw it.
+  const dagger = structuredClone(healer);
+  dagger.talents.push("Armor Piercing");
+  dagger.weapon = "Formless Shard"; // Dagger, not Greatcannon/Pistol/Rifle
+  dagger.final["Light Wep."] = 30; dagger.final.Willpower -= 30; // keep 330, meet Armor Piercing's "Weapon: 30"
+  const rDagger = validate(dagger, game);
+  assert.ok(rDagger.errors.some(e => e.code === "talent_weapon_type" && e.msg.includes("Armor Piercing")), JSON.stringify(rDagger.errors));
+
+  const pistol = structuredClone(healer);
+  pistol.talents.push("Armor Piercing");
+  pistol.weapon = "Silversix"; // Pistol - one of the three allowed alternatives
+  pistol.final["Light Wep."] = 30; pistol.final.Willpower -= 30;
+  const rPistol = validate(pistol, game);
+  assert.ok(!rPistol.errors.some(e => e.code === "talent_weapon_type"), JSON.stringify(rPistol.errors));
+});
+
+test("oath_reqs: the requested oath's own stat/prerequisite requirements are enforced", () => {
+  // "Oath: <name>" is itself a talent entry (rarity Oath) with real reqs/pre in game.json, but validate()'s
+  // per-talent loop skips every "Oath: "/"Murmur: " entry outright (isPath), so nothing ever checked it.
+  // Real build dps-heavy-blindseer (out/builds) surfaced this live: Willpower 37 final / 7 pre-shrine, both
+  // below Oath: Blindseer's own Willpower 40 requirement, even though its 3 prerequisite talents were present.
+  const c = structuredClone(healer);
+  c.oath = "Blindseer";
+  c.talents = c.talents.filter(t => !t.startsWith("Oath: ")).concat(["Oath: Blindseer", "Breathing Exercise", "Conquer your Fears", "Disbelief"]);
+  c.final.Willpower = 30; c.preShrine.Willpower = 7; c.final.Charisma += 10; // keep 330, drop Willpower below 40 in both phases
+  const r = validate(c, game);
+  assert.ok(r.errors.some(e => e.code === "oath_reqs" && e.msg.includes("Blindseer")), JSON.stringify(r.errors));
+
+  const ok = structuredClone(c);
+  ok.final.Willpower = 40; ok.final.Charisma -= 10;
+  const rOk = validate(ok, game);
+  assert.ok(!rOk.errors.some(e => e.code === "oath_reqs"), JSON.stringify(rOk.errors));
+});
+
+test("oath_reqs: Oath: Contractor lists itself as a prerequisite, which must not read as unmet", () => {
+  // data quirk in game.json - Oath: Contractor's own `pre` is ["Oath: Contractor"]. Since path entries
+  // are never in core.talents, this self-reference must be satisfied some other way (see talentObtainable's
+  // `have` set), or every Contractor build would wrongly fail oath_reqs.
+  const c = structuredClone(healer);
+  c.oath = "Contractor";
+  c.talents = c.talents.filter(t => !t.startsWith("Oath: ")).concat(["Oath: Contractor"]);
+  const r = validate(c, game);
+  assert.ok(!r.errors.some(e => e.code === "oath_reqs"), JSON.stringify(r.errors));
+});
+
+test("Jus Karita: nested origin requirement (data/raw's or[1].or[0].origin) is honoured", () => {
+  const wrongOrigin = structuredClone(healer);
+  wrongOrigin.origin = "Castaway"; // healer fixture's own origin is Justicar, so pick a different one
+  const rWrong = talentObtainable("Jus Karita", wrongOrigin, game);
+  assert.ok(!rWrong.ok, JSON.stringify(rWrong));
+
+  const justicar = structuredClone(healer); // fixture origin is already Justicar
+  const rJusticar = talentObtainable("Jus Karita", justicar, game);
+  assert.ok(rJusticar.ok, JSON.stringify(rJusticar));
+});
+
 test("resolveTalent strips variant suffix and ignores case", () => {
   assert.equal(resolveTalent("Wyvern's Claw [LHT]", game), "Wyvern's Claw");
   assert.equal(resolveTalent("To the Finish", game), "To The Finish");
@@ -77,8 +136,11 @@ test("resolveTalent strips variant suffix and ignores case", () => {
 
 test("top 30 corpus builds by views validate with (almost) zero hard errors", () => {
   // stored pointSpent is stale for ~8% of the feed; require our own formula to agree so we test the validator, not the feed
+  const seen = new Set();
   const top = feeds.filter(b => b.stats.pointSpent === 330 && b.talents.length && pointsSpent(fromFeedBuild(b).final) === 330)
-    .sort((a, b) => b.meta.views - a.meta.views).slice(0, 30);
+    .sort((a, b) => b.meta.views - a.meta.views)
+    .filter(b => !seen.has(b.id) && seen.add(b.id))
+    .slice(0, 30);
   // talent_weapon_type: real players keep Shield-only talents (Turtle Shell, Knight's Rally, ...) while
   // wielding an unrelated weapon at a nontrivial rate in this corpus (5 of the top 16 unique builds here) -
   // corpus noise like the other SOFT codes, not a validator gap (see the real-builder-verified rule in validate.js).
@@ -90,8 +152,9 @@ test("top 30 corpus builds by views validate with (almost) zero hard errors", ()
     const hard = r.errors.filter(e => !SOFT.includes(e.code));
     if (hard.length) bad.push({ id: b.id, errors: hard.slice(0, 3) });
   }
-  // published builds can be genuinely inconsistent (K6tHCbzu has Conditioned Runner without its prerequisite Scaredy Cat); tolerate 2 of 30
-  assert.ok(bad.length <= 2, JSON.stringify(bad, null, 1));
+  // published builds with genuine inconsistencies (prereq/stat/race violations the builder itself would flag); a NEW id here is a validator regression
+  const KNOWN_INCONSISTENT = new Set(["K6tHCbzu", "HpX7upTq", "SPkeXytO", "sTWc9aJe", "K1sdDhdj"]);
+  assert.ok(bad.every(b => KNOWN_INCONSISTENT.has(b.id)), JSON.stringify(bad.filter(b => !KNOWN_INCONSISTENT.has(b.id)), null, 1));
   assert.ok(unresolved.size <= 5, `unresolved talents: ${[...unresolved]}`);
   assert.ok(unknownMantras.size <= 2, `unknown mantras: ${[...unknownMantras]}`);
 });
