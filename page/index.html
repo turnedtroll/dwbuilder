@@ -142,14 +142,39 @@
       </div>
 
       <div class="actions" id="action-bar">
+        <button type="button" class="primary send" id="send-builder">Send to deepwoken.co</button>
         <button type="button" class="ghost" id="copy-code">Copy build code</button>
-        <a class="ghost" id="bookmarklet" href="#" draggable="true" title="Drag me to your bookmarks bar">Import bookmarklet</a>
         <button type="button" class="ghost" id="ai-refine" hidden>Refine with AI</button>
         <button type="button" class="ghost" id="save-library" hidden>Save to library</button>
         <button type="button" class="ghost" id="library-tab" hidden>Library</button>
         <span class="spacer"></span>
         <span class="toast" id="toast" hidden></span>
       </div>
+
+      <section class="import" id="import-section">
+        <h3>Get this build into deepwoken.co</h3>
+        <div class="steps">
+          <div class="step" id="setup-step">
+            <div class="step-n">One-time setup</div>
+            <p>Drag this button onto your bookmarks bar:</p>
+            <a class="bookmark" id="bookmarklet" href="#" draggable="true" title="Drag me to your bookmarks bar">⚔ Import to Deepwoken</a>
+            <p class="hint">Bookmarks bar hidden? Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> (<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> on Mac). On a phone this doesn't work — use a computer.</p>
+            <label class="hint done"><input type="checkbox" id="setup-done"> I've added the bookmark</label>
+          </div>
+          <div class="step">
+            <div class="step-n">Then, for any build</div>
+            <ol>
+              <li>Click <b>Send to deepwoken.co</b> above — it copies the build and opens the builder.</li>
+              <li>In the builder tab, click the <b>⚔ Import to Deepwoken</b> bookmark. The build loads instantly.</li>
+            </ol>
+            <p class="hint">If the bookmark can't read your clipboard it asks you to paste — the code is also in the box below.</p>
+            <details>
+              <summary class="hint">Show build code</summary>
+              <textarea id="build-code" readonly spellcheck="false" aria-label="Build code"></textarea>
+            </details>
+          </div>
+        </div>
+      </section>
 
       <section id="refine-section" hidden>
         <h3>Refined with AI</h3>
@@ -195,18 +220,6 @@
         <dl class="kv" id="gear"></dl>
       </section>
 
-      <section>
-        <h3>Import into deepwoken.co</h3>
-        <div class="bookmarklet">
-          <ol>
-            <li>Drag the <b>Import bookmarklet</b> link above to your bookmarks bar.</li>
-            <li>Open <a href="https://deepwoken.co/builder" target="_blank" rel="noopener">deepwoken.co/builder</a>.</li>
-            <li>Click the bookmark and paste the build code.</li>
-          </ol>
-          <label for="build-code" class="hint">Build code (also copied by the button above)</label>
-          <textarea id="build-code" readonly spellcheck="false"></textarea>
-        </div>
-      </section>
     </article>
   </div>
 </div>

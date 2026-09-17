@@ -39,13 +39,17 @@ stay hidden.
 
 ## Using a build in deepwoken.co
 
-1. Drag the **Import bookmarklet** link from the page to your bookmarks bar (once).
-2. Click **Copy build code** on the build you want.
-3. Open <https://deepwoken.co/builder>, click the bookmark, paste the code.
+One-time setup (on a computer): drag the **⚔ Import to Deepwoken** button from the page onto
+your bookmarks bar (`Ctrl`+`Shift`+`B` shows the bar if it is hidden).
 
-The builder reloads with the build in place — stats, talents, mantras, gear and shrine
-phases. If the bookmarklet says it did not recognise the code, copy the code from the
-text box at the bottom of the page instead.
+Then, for any build:
+
+1. Click **Send to deepwoken.co** — it copies the build and opens the builder in a new tab.
+2. In the builder tab, click the **⚔ Import to Deepwoken** bookmark. The build loads instantly.
+
+The bookmark reads the build code from your clipboard and hands it to the builder directly
+(no reload). If the browser blocks clipboard access it asks you to paste; the code is under
+"Show build code" on the page.
 
 ## Refreshing the data
 

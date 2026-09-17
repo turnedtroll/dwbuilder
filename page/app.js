@@ -17,10 +17,20 @@ const el = (tag, attrs = {}, ...children) => {
   return n;
 };
 
-const BOOKMARKLET_SRC = `(()=>{if(location.hostname!=='deepwoken.co'){alert('Open https://deepwoken.co/builder first, then click this bookmark.');return;}
-const s=prompt('Paste the build code from dwbuilder:');if(!s)return;
-try{const env=JSON.parse(s);if(env.version!==1||!env.build)throw 0;localStorage.setItem('_dwb.draft.v1.new',JSON.stringify(env));location.href='/builder';}
-catch(e){alert('That did not look like a dwbuilder build code.');}})();`;
+// The bookmark runs on deepwoken.co/builder. It reads the build code from the clipboard (falls
+// back to a paste prompt) and loads it straight into the builder's pinia store - the same call
+// the builder makes when it recovers a draft - so nothing reloads and nothing races the
+// builder's own draft autosave. If the store can't be found it falls back to the localStorage
+// draft key + reload. `void` keeps the javascript: URL from navigating to the promise's text.
+const BOOKMARKLET_SRC = `void (async()=>{
+if(location.hostname!=='deepwoken.co'){alert('Open https://deepwoken.co/builder first, then click this bookmark.');return;}
+const parse=t=>{try{const e=JSON.parse(t);return e&&e.version===1&&e.build?e:null}catch(x){return null}};
+let env=null;try{env=parse(await navigator.clipboard.readText());}catch(x){}
+if(!env){const t=prompt('Paste the build code from Deepwoken Forge:');if(!t)return;env=parse(t);}
+if(!env){alert('That did not look like a Deepwoken Forge build code. Click "Send to deepwoken.co" on the Forge page first, then click this bookmark.');return;}
+try{const root=document.querySelector('#__nuxt');const store=root.__vue_app__.config.globalProperties.$pinia._s.get('build');store.restoreDraft(env.build,env.phase||'post');window.scrollTo(0,0);}
+catch(x){localStorage.setItem('_dwb.draft.v1.new',JSON.stringify(env));location.href='/builder';}
+})();`.replace(/\n/g, "");
 
 const state = {
   include: new Set(), exclude: new Set(),
@@ -236,16 +246,31 @@ function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
 }
+async function copyToClipboard() {
+  const code = $("build-code").value;
+  try { await navigator.clipboard.writeText(code); return true; }
+  catch {
+    const d = $("build-code").closest("details"); if (d) d.open = true;
+    $("build-code").focus(); $("build-code").select();
+    return false;
+  }
+}
 async function copyCode() {
   if (!state.build) return;
-  const code = $("build-code").value;
-  try {
-    await navigator.clipboard.writeText(code);
-    toast("Copied — now run the bookmarklet on deepwoken.co/builder");
-  } catch {
-    $("build-code").focus(); $("build-code").select();
-    toast("Clipboard blocked — the code is selected below, copy it by hand");
-  }
+  toast(await copyToClipboard() ? "Build code copied" : "Clipboard blocked — the code is selected below, copy it by hand");
+}
+// Copies the code, then opens the builder in a new tab; the bookmark does the rest there.
+async function sendToBuilder() {
+  if (!state.build) return;
+  const copied = await copyToClipboard();
+  window.open("https://deepwoken.co/builder", "_blank", "noopener");
+  toast(copied ? "Copied — now click the ⚔ Import bookmark in the builder tab" : "Clipboard blocked — copy the code below, then paste it when the bookmark asks");
+}
+const SETUP_KEY = "forge.setupDone";
+function setupDone(done) {
+  $("setup-step").classList.toggle("collapsed", done);
+  $("setup-done").checked = done;
+  try { localStorage.setItem(SETUP_KEY, done ? "1" : ""); } catch { /* per-viewer convenience only */ }
 }
 
 // ---------- capabilities: Refine with AI (sample), Library (db) ----------
@@ -442,9 +467,13 @@ function boot() {
   for (const id of ["oath", "origin", "race", "weapon", "shrine", "multifaceted", "attunementless"]) $(id).addEventListener("change", () => { state.auto = false; });
   $("request-form").addEventListener("submit", e => { e.preventDefault(); generate(); });
   $("copy-code").addEventListener("click", copyCode);
+  $("send-builder").addEventListener("click", sendToBuilder);
   const bm = $("bookmarklet");
   bm.href = "javascript:" + encodeURIComponent(BOOKMARKLET_SRC);
-  bm.addEventListener("click", e => { e.preventDefault(); toast("Drag this link to your bookmarks bar, then use it on deepwoken.co/builder"); });
+  bm.addEventListener("click", e => { e.preventDefault(); toast("Don't click it here — drag it up onto your bookmarks bar"); });
+  $("setup-done").addEventListener("change", e => setupDone(e.target.checked));
+  let done = false; try { done = localStorage.getItem(SETUP_KEY) === "1"; } catch { /* ignore */ }
+  setupDone(done);
 
   // The page at rest shows a real build: the most-viewed archetype's role, generated once.
   const top = [...ARCH.archetypes].sort((a, b) => b.views_total - a.views_total)[0];
