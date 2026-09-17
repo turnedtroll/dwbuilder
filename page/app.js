@@ -38,6 +38,7 @@ const state = {
   build: null, req: null, auto: true,
   sample: null, db: null, libraryUnsub: null,
 };
+const ROLE_LABEL = { dps: "DPS", healer: "Healer", tank: "Tank", mage: "Mage", hybrid: "Hybrid", bossraid: "Boss raid", chime: "Chime" };
 const archetypeOf = b => ARCH.archetypes.find(a => a.id === b?.based_on?.archetype) ?? null;
 const isPathEntry = n => typeof n === "string" && (n.startsWith("Oath: ") || n.startsWith("Murmur: "));
 
@@ -163,7 +164,7 @@ function generate() {
 // ---------- render ----------
 const fmtStat = s => s;
 function render(b) {
-  $("build-role").textContent = b.based_on?.archetype?.split("-")[0] ?? "";
+  $("build-role").textContent = ROLE_LABEL[b.based_on?.archetype?.split("-")[0]] ?? b.based_on?.archetype?.split("-")[0] ?? "";
   $("build-auto").hidden = !state.auto;
   $("build-based").textContent = `based on ${b.based_on.members} build${b.based_on.members === 1 ? "" : "s"}${b.based_on.adapted ? " (adapted)" : ""}`;
   $("build-name").textContent = b.name;
@@ -211,7 +212,12 @@ function render(b) {
   if (hasPre) figs.push(["Shrine at power", b.shrinePower ?? E.powerFor(b.preShrine)]);
   $("figures").replaceChildren(...figs.map(([k, v]) => el("span", {}, `${k} `, el("b", { text: v }))));
 
-  // talents
+  // talents - the builder's shared card budget: counting talents <= 52 + (12 - obtained mantras) * 2
+  const bud = b.budget;
+  $("talent-count").textContent = bud ? `${bud.counting} / ${bud.cap}` : "";
+  $("talent-hint").textContent = bud
+    ? `${bud.counting} talent picks of ${bud.cap} (${bud.mantras} obtained mantra${bud.mantras === 1 ? "" : "s"} cost 2 picks each; tier, origin and gear talents are free). ${b.talents.length - bud.counting} free talents included.`
+    : "";
   const groups = b.talentGroups ?? { core: b.talents, recommended: [], choose: {} };
   const tal = $("talents"); tal.replaceChildren();
   const pills = (names, cls = "") => el("div", { class: "pills" }, ...names.map(n => el("span", { class: `pill ${cls}`, text: n })));
@@ -220,11 +226,24 @@ function render(b) {
   for (const [label, opts] of Object.entries(groups.choose ?? {})) tal.append(el("h4", { text: `Choose: ${label}` }), pills(opts, "rec"));
   if (!tal.children.length) tal.append(el("p", { class: "hint", text: "No talents." }));
 
-  // mantras
-  $("mantras").replaceChildren(...(b.mantras.length ? b.mantras.map(m => {
-    const gem = b.mantraMods?.[m]?.gem;
-    return el("span", { class: "pill" }, m, gem && gem !== "None" ? el("span", { class: "gem", text: gem }) : null);
-  }) : [el("p", { class: "hint", text: b.oath === "Silentheart" ? "No mantras — Silentheart forgoes them." : "No mantras." })]));
+  // mantras - equipped loadout (fills the slots), swap pool, and free oath/monster mantras
+  const mg = b.mantraGroups;
+  const man = $("mantras"); man.replaceChildren();
+  const gemOf = m => { const g = b.mantraMods?.[m]?.gem; return g && g !== "None" ? el("span", { class: "gem", text: g }) : null; };
+  if (mg) {
+    const slotTotal = Object.values(mg.slots ?? {}).reduce((x, y) => x + y, 0);
+    $("mantra-count").textContent = `${mg.equipped.length} equipped / ${slotTotal} slots`;
+    if (mg.equipped.length) man.append(el("h4", { text: `Equipped (${mg.equipped.length} of ${slotTotal} slots)` }),
+      el("div", { class: "pills" }, ...mg.equipped.map(e => el("span", { class: "pill" }, e.name, gemOf(e.name), el("span", { class: "slot", text: e.slot })))));
+    if (mg.extra.length) man.append(el("h4", { text: `Also obtained - swap in as needed (${mg.extra.length})` }),
+      el("div", { class: "pills" }, ...mg.extra.map(m => el("span", { class: "pill rec" }, m, gemOf(m)))));
+    if (mg.free.length) man.append(el("h4", { text: `Oath / monster mantras - no slot or pick cost (${mg.free.length})` }),
+      el("div", { class: "pills" }, ...mg.free.map(m => el("span", { class: "pill free" }, m, gemOf(m)))));
+    if (!man.children.length) man.append(el("p", { class: "hint", text: b.oath === "Silentheart" ? "No mantras — Silentheart forgoes them." : "No mantras." }));
+  } else {
+    $("mantra-count").textContent = "";
+    man.append(el("div", { class: "pills" }, ...b.mantras.map(m => el("span", { class: "pill" }, m, gemOf(m)))));
+  }
 
   // gear & path
   const kv = [["Weapon", b.weapon || "—"], ["Enchant", b.enchant || "—"], ["Outfit", b.outfit || "—"],

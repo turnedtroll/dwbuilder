@@ -213,3 +213,8 @@ kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--li
 .card .ghost { justify-self: start; margin-top: 4px; }
 .ghost.on { border-color: var(--accent); color: var(--accent); }
 #playstyle { margin: 0 0 10px; font-size: 15px; }
+
+/* counts next to section headings */
+.build h3 .count { font: 500 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); margin-left: 8px; letter-spacing: 0; }
+.pill .slot { color: var(--muted); font-size: 12px; margin-left: 4px; text-transform: uppercase; letter-spacing: .06em; }
+.pill.free { border-color: var(--accent); }

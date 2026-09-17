@@ -186,6 +186,67 @@ export function mantraSlots(core, game) {
   return s;
 }
 
+const POOL_CATEGORIES = new Set(["Combat", "Mobility", "Support", "Wisp"]);
+// Obtained mantras that cost talent picks in the builder: type Normal (Oath/Monster/Origin/Event
+// mantras are free) in the four slot categories.
+export function isCountingMantra(name, game) {
+  const m = game.mantras[name];
+  return !!m && (m.type ?? "Normal") === "Normal" && POOL_CATEGORIES.has(m.category);
+}
+
+// The builder's shared card budget (its Talents tab shows "N / cap"): at Power 20 you get 76
+// picks; every obtained Normal mantra spends two, so cap = 52 + (12 - mantras) * 2. Counting
+// talents are those with countTowardsTalentTotal (game.json `counts`) that aren't gear-granted;
+// Soulbreaker's Ardour Scream / Spotter are free.
+export function talentBudget(core, game) {
+  const granted = grantedTalents(core, game);
+  let counting = 0;
+  const seen = new Set();
+  for (const t of core.talents) {
+    const r = resolveTalent(t, game);
+    if (!r || seen.has(r) || isPath(r)) continue;
+    seen.add(r);
+    const g = game.talents[r];
+    if (!g?.counts || granted.has(r)) continue;
+    if (core.oath === "Soulbreaker" && (r === "Ardour Scream" || r === "Spotter")) continue;
+    counting++;
+  }
+  const mantras = core.mantras.filter(m => isCountingMantra(m, game)).length;
+  const cap = 52 + (12 - mantras) * 2;
+  return { counting, mantras, cap, room: cap - counting };
+}
+
+// Which obtained mantras are actually equipped: Normal mantras fill their category's slots in list
+// order (Wisp may take a Support slot, anything may take a Wildcard slot); the rest are `extra` -
+// still obtained, swapped in at will. Non-Normal mantras (oath/monster/origin) are `free`.
+export function mantraLoadout(core, game) {
+  const slots = mantraSlots(core, game);
+  const used = { Combat: 0, Mobility: 0, Support: 0, Wisp: 0, Wildcard: 0 };
+  const equipped = [], extra = [], free = [];
+  for (const name of core.mantras) {
+    const m = game.mantras[name];
+    if (!m) continue;
+    if ((m.type ?? "Normal") !== "Normal" || !POOL_CATEGORIES.has(m.category)) { free.push(name); continue; }
+    const cat = m.category;
+    let slot = null;
+    if (used[cat] < slots[cat]) slot = cat;
+    else if (cat === "Wisp" && used.Support < slots.Support) slot = "Support";
+    else if (used.Wildcard < slots.Wildcard) slot = "Wildcard";
+    if (slot) { used[slot]++; equipped.push({ name, slot }); } else extra.push(name);
+  }
+  return { equipped, extra, free, slots };
+}
+
+// An oath's mantras ("attunement": "Oath: X") belong to that oath, an origin's to that origin;
+// the builder only lists them under the matching path. Returns why it's not allowed, or null.
+export function mantraPathWhy(name, core, game) {
+  const m = game.mantras[name];
+  const a = m?.attunement ?? "";
+  if (a.startsWith("Oath: ") && a.slice(6) !== core.oath) return `needs oath ${a.slice(6)}`;
+  if (a.startsWith("Origin: ") && a.slice(8) !== core.origin) return `needs origin ${a.slice(8)}`;
+  return null;
+}
+
 export function mantraUsage(core, game) {
   const slots = mantraSlots(core, game);
   const counts = { Combat: 0, Mobility: 0, Support: 0, Wisp: 0, Wildcard: 0 };
@@ -263,11 +324,17 @@ export function validate(core, game) {
     const g = game.mantras[m];
     if (!g) { err("unknown_mantra", m); continue; }
     if (!phaseOk(g.reqs, core)) err("mantra_reqs", `${m} needs ${JSON.stringify(g.reqs)}`);
+    const pathWhy = mantraPathWhy(m, core, game);
+    if (pathWhy) err("mantra_reqs", `${m} ${pathWhy}`);
     const attn = canon(g.attunement);
     if (attn && !phaseOk({ [attn]: 1 }, core)) err("mantra_reqs", `${m} needs ${attn}`);
   }
+  // Obtained mantras beyond the equip slots are the swap pool, not an error (the builder doesn't
+  // flag them either); what the builder does enforce is the shared talent/mantra card budget.
   const usage = mantraUsage(core, game);
-  if (usage.overflow > 0) err("mantra_slots", `${usage.overflow} mantra(s) over slot limit ${JSON.stringify(usage.slots)}`);
+  if (usage.overflow > 0) warn("mantra_slots", `${usage.overflow} obtained mantra(s) beyond the ${Object.values(usage.slots).reduce((x, y) => x + y, 0)} equip slots - swap them in as needed`);
+  const budget = talentBudget(core, game);
+  if (budget.counting > budget.cap) err("talent_budget", `${budget.counting} talents, but only ${budget.cap} fit with ${budget.mantras} obtained mantras (52 + (12 - mantras) * 2)`);
   if (core.outfit && core.outfit !== "None") {
     const o = game.outfits[core.outfit];
     if (!o) err("unknown_outfit", core.outfit);

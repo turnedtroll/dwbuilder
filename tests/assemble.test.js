@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { normalizeRequest, selectArchetype, planStats, fitTo330, assemble } from "../engine/assemble.js";
 import { pointsSpent, zeroFlat, ATTUNEMENTS, WEAPON_STATS } from "../engine/stats.js";
 import { shrineOfOrder } from "../engine/shrine.js";
-import { validate } from "../engine/validate.js";
+import { validate, talentBudget } from "../engine/validate.js";
 const game = JSON.parse(readFileSync(new URL("../data/game.json", import.meta.url)));
 const A = JSON.parse(readFileSync(new URL("../data/archetypes.json", import.meta.url))).archetypes;
 
@@ -81,6 +81,17 @@ test("assemble: every archetype's default request is valid; meta score >= 70 for
   assert.deepEqual(veryLow, [], JSON.stringify(veryLow, null, 1));
   // spec §7.4 asks for >= 70 everywhere; 3 medoids have pre/post blocks that do not reconcile under Shrine of Order (controller ruling R10)
   assert.ok(low.length <= Math.floor(A.length * 0.03), JSON.stringify(low, null, 1));
+});
+
+test("kits are player-sized: every default build respects the talent budget and its archetype's mantra count", () => {
+  for (const a of A) {
+    const b = assemble({ role: a.role, oath: a.oath[0]?.[0] ?? null }, [a], game);
+    const bud = talentBudget(b, game);
+    assert.ok(bud.counting <= bud.cap, `${a.id}: ${bud.counting} counting talents > cap ${bud.cap} (mantras ${bud.mantras})`);
+    assert.ok(bud.mantras <= Math.max(a.budget.mantras, 1), `${a.id}: ${bud.mantras} Normal mantras > archetype budget ${a.budget.mantras}`);
+    assert.ok(b.mantraGroups && Array.isArray(b.mantraGroups.equipped) && Array.isArray(b.mantraGroups.extra), a.id);
+    assert.ok(!b.validation.errors.some(e => e.code === "talent_budget"), a.id);
+  }
 });
 
 test("R7: fitTo330 relaxes an unfit oath floor instead of throwing", () => {

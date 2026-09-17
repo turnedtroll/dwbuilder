@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { validate, mantraSlots, mantraUsage, talentObtainable, resolveTalent } from "../engine/validate.js";
+import { validate, mantraSlots, mantraUsage, talentObtainable, resolveTalent, talentBudget, mantraLoadout } from "../engine/validate.js";
 import { fromFeedBuild, fromSpec } from "../engine/convert.js";
 import { pointsSpent } from "../engine/stats.js";
 
@@ -187,6 +187,44 @@ test("attunement tier talents (Adept/Expert/Master X, X Unbounded) follow FINAL 
   assert.deepEqual(validate(granted, game).errors.filter(e => e.msg.includes("Rending Needle")), []);
 });
 
+test("talent_budget: counting talents are capped at 52 + (12 - obtained Normal mantras) * 2 (builder rule)", () => {
+  // The builder's Talents tab shows "N / max" in red past this; every obtained Combat/Mobility/Support/Wisp
+  // mantra of type Normal costs two talent picks. Oath/Monster/Origin mantras and non-counting talents
+  // (tier talents, origin talents) are free.
+  const c = structuredClone(healer);
+  const b = talentBudget(c, game);
+  assert.equal(b.cap, 52 + (12 - b.mantras) * 2);
+  assert.ok(b.counting <= b.cap, JSON.stringify(b));
+  // pad with obtainable counting talents until over the cap
+  const spare = Object.keys(game.talents).filter(n => game.talents[n].counts && !c.talents.includes(n) && !n.startsWith("Oath: ") && talentObtainable(n, c, game).ok);
+  c.talents.push(...spare.slice(0, b.cap - b.counting + 1));
+  const r = validate(c, game);
+  assert.ok(r.errors.some(e => e.code === "talent_budget"), JSON.stringify(r.errors.map(e => e.code)));
+});
+
+test("mantraLoadout: obtained mantras split into equipped (fills the slots) and extra; oath/monster mantras are free", () => {
+  const c = structuredClone(healer);
+  const lo = mantraLoadout(c, game);
+  const slots = mantraSlots(c, game);
+  const equippedNormal = lo.equipped.filter(e => game.mantras[e.name]?.type === "Normal");
+  assert.ok(equippedNormal.length <= Object.values(slots).reduce((x, y) => x + y, 0), JSON.stringify({ lo, slots }));
+  for (const e of lo.equipped) assert.ok(e.slot, `${e.name} has no slot`);
+  assert.equal(lo.equipped.length + lo.extra.length + lo.free.length, c.mantras.length);
+  for (const f of lo.free) assert.notEqual(game.mantras[f]?.type, "Normal");
+  // more Normal mantras than slots is NOT an error (the builder doesn't flag it): they're the swap pool
+  const r = validate(c, game);
+  assert.ok(!r.errors.some(e => e.code === "mantra_slots"), JSON.stringify(r.errors));
+});
+
+test("mantra_reqs: an oath's mantras need that oath; an origin's mantras need that origin", () => {
+  const c = structuredClone(healer); // Linkstrider
+  c.mantras.push("Sightless Beam"); // Oath: Blindseer
+  const r = validate(c, game);
+  assert.ok(r.errors.some(e => e.code === "mantra_reqs" && e.msg.startsWith("Sightless Beam")), JSON.stringify(r.errors));
+  const ok = structuredClone(c); ok.oath = "Blindseer";
+  assert.ok(!validate(ok, game).errors.some(e => e.msg.startsWith("Sightless Beam")));
+});
+
 test("resolveTalent strips variant suffix and ignores case", () => {
   assert.equal(resolveTalent("Wyvern's Claw [LHT]", game), "Wyvern's Claw");
   assert.equal(resolveTalent("To the Finish", game), "To The Finish");
@@ -204,7 +242,10 @@ test("top 30 corpus builds by views validate with (almost) zero hard errors", ()
   // talent_weapon_type: real players keep Shield-only talents (Turtle Shell, Knight's Rally, ...) while
   // wielding an unrelated weapon at a nontrivial rate in this corpus (5 of the top 16 unique builds here) -
   // corpus noise like the other SOFT codes, not a validator gap (see the real-builder-verified rule in validate.js).
-  const SOFT = ["warder_cap", "mantra_slots", "unknown_talent", "unknown_mantra", "weapon_reqs", "outfit_reqs", "talent_weapon_type"];
+  // talent_budget: 13% of published builds list a few more talents than 52 + (12 - mantras) * 2 allows
+  // (wishlists; the builder shows the count in red but raises no issue). Generated builds must respect it -
+  // see the assemble test - but for the corpus it is noise.
+  const SOFT = ["warder_cap", "mantra_slots", "unknown_talent", "unknown_mantra", "weapon_reqs", "outfit_reqs", "talent_weapon_type", "talent_budget"];
   const bad = [], unresolved = new Set(), unknownMantras = new Set();
   for (const b of top) {
     const r = validate(fromFeedBuild(b), game);

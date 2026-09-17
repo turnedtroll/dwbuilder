@@ -1,6 +1,6 @@
 import { canon, zeroFlat, pointsSpent, powerFor, pointsForPower, meetsStats, ALL_STATS, BASE_STATS, ATTUNEMENTS, WEAPON_STATS } from "./stats.js";
 import { shrineOfOrder } from "./shrine.js";
-import { resolveTalent, talentObtainable, mantraUsage, WARDER_CATEGORY, validate } from "./validate.js";
+import { resolveTalent, talentObtainable, mantraUsage, mantraLoadout, talentBudget, isCountingMantra, mantraPathWhy, WARDER_CATEGORY, validate } from "./validate.js";
 import { scoreBuild } from "./score.js";
 import { toDraft } from "./convert.js";
 
@@ -439,9 +439,23 @@ export function planStats(req, archetype, game) {
 // are empty even though the talent's primary `pre` lists something not yet held). Warder Techniques
 // (excluding Justicar's Gift) are capped at the first 4 in candidate order; the rest are moved out of
 // the taken list into `groups.choose["Warder path (pick 4)"]` so validate()'s warder_cap never trips.
+// How many obtained Normal mantras this build will hold (decided before talents are picked, since
+// every one of them costs two talent picks in the builder's shared budget): the archetype's typical
+// count, or more if the request insists on more must-have mantras than that.
+export function plannedMantraCount(req, archetype, game) {
+  const must = req.must_mantras.filter(m => isCountingMantra(m, game)).length;
+  return Math.max(archetype.budget?.mantras ?? 8, must);
+}
+
 export function pickTalents(req, archetype, coreDraft, game) {
   const resolve = n => resolveTalent(n, game) ?? n;
   const avoidSet = new Set(req.avoid_talents.map(resolve));
+  // Builder rule: counting talents <= 52 + (12 - obtained Normal mantras) * 2. Real kits sit just
+  // under it (corpus median 57 talents with 8 mantras), so the archetype's own typical talent count
+  // is the target and the rule is the hard ceiling.
+  const cap = 52 + (12 - plannedMantraCount(req, archetype, game)) * 2;
+  const target = Math.min(cap, archetype.budget?.talents ?? cap);
+  const counts = n => { const g = game.talents[resolve(n)]; return !!g?.counts && !(coreDraft.oath === "Soulbreaker" && ["Ardour Scream", "Spotter"].includes(resolve(n))); };
 
   const dropped = [];
   const mustResolved = [];
@@ -479,14 +493,32 @@ export function pickTalents(req, archetype, coreDraft, game) {
 
   const takenSet = new Set();
   const taken = [];
+  let countingTaken = 0;
+  // A talent's not-yet-taken prerequisite chain has to fit alongside it (chains are added whole in
+  // the pass below), so reserve room for it when deciding whether the talent still fits.
+  const chainCost = name => {
+    const need = new Set(); const stack = [name];
+    while (stack.length) {
+      const n = stack.pop();
+      for (const p of game.talents[resolve(n)]?.pre ?? []) {
+        const rp = resolve(p);
+        if (takenSet.has(rp) || need.has(rp) || !game.talents[rp] || rp.startsWith("Oath: ") || rp.startsWith("Murmur: ")) continue;
+        need.add(rp); stack.push(rp);
+      }
+    }
+    return [...need].filter(counts).length;
+  };
   let changed = true;
   let guard = candidates.length * candidates.length + 10;
   while (changed && guard-- > 0) {
     changed = false;
     for (const name of candidates) {
       if (takenSet.has(name) || excludesTaken(name)) continue;
+      const cost = (counts(name) ? 1 : 0) + chainCost(name);
+      if (cost && countingTaken + cost > (mustSet.has(name) ? cap : target)) continue;
       if (talentObtainable(name, { ...coreDraft, talents: taken }, game).ok) {
         takenSet.add(name); taken.push(name); changed = true;
+        if (counts(name)) countingTaken++;
       }
     }
   }
@@ -504,9 +536,21 @@ export function pickTalents(req, archetype, coreDraft, game) {
         if (takenSet.has(rp) || excludesTaken(rp)) continue;
         if (talentObtainable(rp, { ...coreDraft, talents: taken }, game).ok) {
           takenSet.add(rp); taken.push(rp); changed = true;
+          if (counts(rp)) countingTaken++;
         }
       }
     }
+  }
+
+  // Hard ceiling: if prerequisite auto-adds pushed the count past the builder's cap, drop the
+  // least-frequent counting leaves (talents nothing else depends on) until it fits.
+  const dependedOn = n => taken.some(t => t !== n && (game.talents[resolve(t)]?.pre ?? []).map(resolve).includes(n));
+  const freqOf = new Map(archetype.talent_freq);
+  while (countingTaken > cap) {
+    const leaves = taken.filter(n => counts(n) && !mustSet.has(n) && !oathPre.includes(n) && !dependedOn(n));
+    if (!leaves.length) break;
+    const drop = leaves.sort((a, b) => (freqOf.get(a) ?? 0) - (freqOf.get(b) ?? 0))[0];
+    taken.splice(taken.indexOf(drop), 1); takenSet.delete(drop); countingTaken--;
   }
 
   // Warder cap, ordered by candidate order first (prereq-auto-adds that aren't candidates sort after,
@@ -551,6 +595,7 @@ export function pickTalents(req, archetype, coreDraft, game) {
 export function pickMantras(req, archetype, coreDraft, game) {
   const avoidSet = new Set(req.avoid_mantras);
   const oathMantras = Object.values(game.oaths[coreDraft.oath]?.mantras ?? {}).flat();
+  const poolSize = plannedMantraCount(req, archetype, game);
 
   const seen = new Set();
   const candidates = [];
@@ -559,17 +604,31 @@ export function pickMantras(req, archetype, coreDraft, game) {
     seen.add(n);
     candidates.push(n);
   }
-
-  const taken = [];
-  for (const name of candidates) {
+  const usable = name => {
     const m = game.mantras[name];
-    if (!m) continue;
-    if (!meetsStats(coreDraft.final, m.reqs)) continue;
+    if (!m || !meetsStats(coreDraft.final, m.reqs)) return false;
+    if (mantraPathWhy(name, coreDraft, game)) return false; // another oath's / origin's mantra
     const attn = canon(m.attunement);
-    if (attn && !((coreDraft.final[attn] ?? 0) > 0)) continue;
-    const trial = { ...coreDraft, mantras: [...taken, name] };
-    if (mantraUsage(trial, game).overflow > 0) continue;
-    taken.push(name);
+    return !(attn && !((coreDraft.final[attn] ?? 0) > 0));
+  };
+
+  // Pass 1 - the equipped loadout: Normal mantras that fit an open slot, in frequency order, plus
+  // every free (oath/monster/origin) mantra. Pass 2 - the swap pool: more Normal mantras, still
+  // in frequency order, until the archetype's typical obtained count. Each obtained Normal mantra
+  // costs two talent picks, which pickTalents already budgeted for.
+  const taken = [];
+  let normal = 0;
+  for (const name of candidates) {
+    if (!usable(name)) continue;
+    if (!isCountingMantra(name, game)) { taken.push(name); continue; }
+    if (normal >= poolSize) continue;
+    if (mantraUsage({ ...coreDraft, mantras: [...taken, name] }, game).overflow > 0) continue;
+    taken.push(name); normal++;
+  }
+  for (const name of candidates) {
+    if (normal >= poolSize) break;
+    if (taken.includes(name) || !usable(name) || !isCountingMantra(name, game)) continue;
+    taken.push(name); normal++;
   }
 
   const dropped = [];
@@ -581,8 +640,9 @@ export function pickMantras(req, archetype, coreDraft, game) {
       const m = game.mantras[name];
       if (m) {
         if (!meetsStats(coreDraft.final, m.reqs)) why = `needs ${JSON.stringify(m.reqs)}`;
+        else if (mantraPathWhy(name, coreDraft, game)) why = mantraPathWhy(name, coreDraft, game);
         else if (canon(m.attunement) && !((coreDraft.final[canon(m.attunement)] ?? 0) > 0)) why = `needs ${canon(m.attunement)}`;
-        else why = "mantra slots full";
+        else why = "mantra pool full";
       }
     }
     dropped.push({ name, why });
@@ -837,7 +897,8 @@ export function assemble(partialRequest, archetypes, game) {
 
   const topStats = ALL_STATS.filter(s => plan.final[s] > 0).sort((a, b) => plan.final[b] - plan.final[a]).slice(0, 3);
   const name = adapted ? `Custom ${req.role}` : archetype.label;
-  const description = `A ${archetype.stack.stat}-focused ${req.role} build`
+  const ROLE_WORD = { dps: "DPS", healer: "healer", tank: "tank", mage: "mage", hybrid: "hybrid", bossraid: "boss-raid", chime: "Chime" };
+  const description = `A ${archetype.stack.stat}-focused ${ROLE_WORD[req.role] ?? req.role} build`
     + (plan.shrinePower != null ? ` shrining at Power ${plan.shrinePower}` : "")
     + (topStats.length ? `, built around ${topStats.join(", ")}.` : ".");
   const notes = plan.notes.join("; ");
@@ -861,10 +922,13 @@ export function assemble(partialRequest, archetypes, game) {
   const guide = buildGuide({ ...core, stack: archetype.stack.stat, priority: priorityStats(req, game) }, game);
   const draft = toDraft(core);
 
+  const loadout = mantraLoadout(core, game);
   return {
     ...core,
     shrinePower: plan.shrinePower,
     talentGroups: talentsResult.groups,
+    mantraGroups: { equipped: loadout.equipped, extra: loadout.extra, free: loadout.free, slots: loadout.slots },
+    budget: talentBudget(core, game),
     validation,
     meta_score: score,
     score_breakdown: breakdown,

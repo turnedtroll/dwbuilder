@@ -70,12 +70,20 @@ def load():
             for b in json.load(fh): seen[b["id"]] = b
     return list(seen.values())
 
+INTENT_TAGS = {"pve: boss": "bossraid", "pvp: chime": "chime"}
+INTENT_ROLES = ("bossraid", "chime")
+ROLE_LABEL = {"dps": "DPS", "bossraid": "Boss raid", "chime": "Chime"}
+
+def intent_of(b):
+    tags = {str(t).strip().lower() for t in (b.get("meta", {}).get("tags") or [])}
+    return tuple(sorted({INTENT_TAGS[t] for t in tags if t in INTENT_TAGS}))
+
 def prep(b):
     final = flat(b["attributes"]); pre = flat(b["preShrine"]); post = flat(b["postShrine"])
     shrined = any(pre.values()) and pre != (post if any(post.values()) else final)
     meta = b["stats"]["meta"]
     top_w = max(WEAPON, key=lambda w: final[w])
-    return {"id": b["id"], "views": b["meta"].get("views", 0), "final": final, "pre": pre if shrined else None, "shrined": shrined,
+    return {"id": b["id"], "views": b["meta"].get("views", 0), "final": final, "pre": pre if shrined else None, "shrined": shrined, "intent": intent_of(b),
             "talents": [t for t in b["talents"] if not t.startswith(("Oath: ", "Murmur: "))], "mantras": b["mantras"],
             "mods": b.get("content", {}).get("mantraModifications", {}) or {}, "oath": meta.get("Oath", "None"), "origin": meta.get("Origin"),
             "race": meta.get("Race"), "murmur": meta.get("Murmur"), "bell": meta.get("Bell"), "outfit": meta.get("Outfit"),
@@ -132,6 +140,14 @@ def summarize(key, members, game, resolve):
     # freq() truncation boundary doesn't depend on Python's per-process string hash seed.
     tal = Counter(t for m in members for t in dict.fromkeys(filter(None, map(resolve, m["talents"]))))
     man = Counter(t for m in members for t in dict.fromkeys(t for t in m["mantras"] if t in game["mantras"]))
+    # Typical kit size (builder rule: counting talents <= 52 + (12 - obtained Normal mantras) * 2).
+    # Medians over members, so one wishlist build doesn't inflate the archetype's budget.
+    counting = lambda m: sum(1 for t in dict.fromkeys(filter(None, map(resolve, m["talents"]))) if game["talents"][t].get("counts"))
+    normal_mantras = lambda m: sum(1 for t in dict.fromkeys(m["mantras"]) if t in game["mantras"] and game["mantras"][t].get("type", "Normal") == "Normal"
+                                   and game["mantras"][t].get("category") in ("Combat", "Mobility", "Support", "Wisp"))
+    budget = {"mantras": int(statistics.median(normal_mantras(m) for m in members)),
+              "talents": int(statistics.median(counting(m) for m in members))}
+    budget["talents"] = min(budget["talents"], 52 + (12 - budget["mantras"]) * 2)
     gems = defaultdict(Counter)
     for m in members:
         for name, mod in m["mods"].items():
@@ -154,12 +170,12 @@ def summarize(key, members, game, resolve):
     oath_freq = [kv for kv in freq(oath_counts, len(oath_counts), n) if kv[0] == oath] + [kv for kv in freq(oath_counts, 5, n) if kv[0] != oath][:4]
     ident = "-".join([role, wtype, *(a.lower()[:5] for a in atts), oath.lower()]).replace(" ", "")
     return {
-        "id": ident, "role": role, "label": f"{role.title()} · {'/'.join(atts) or 'attunementless'} · {wtype if wtype != 'none' else 'no weapon'} · {oath}",
+        "id": ident, "role": role, "label": f"{ROLE_LABEL.get(role, role.title())} · {'/'.join(atts) or 'attunementless'} · {wtype if wtype != 'none' else 'no weapon'} · {oath}",
         "members": n, "example_ids": [m["id"] for m in members[:3]], "medoid_id": medoid["id"], "views_total": sum(m["views"] for m in members),
         "stack": {"stat": stack_stat, "min": pct(stack_vals, .25), "modal": modal(stack_vals)},
         "pre_shrine_modal": pre_shrine_modal, "shrine_power_modal": modal(powers), "shrine_power_window": [min(powers), max(powers)],
         "shrined_rate": round(len(shrined) / n, 3), "post_shrine_modal": post_shrine_modal, "post_shrine_spread": spread,
-        "talent_freq": freq(tal, 120, n), "mantra_freq": freq(man, 40, n),
+        "talent_freq": freq(tal, 120, n), "mantra_freq": freq(man, 40, n), "budget": budget,
         "gem_freq": {k: freq(v, 3, sum(v.values())) for k, v in gems.items()},
         "oath": oath_freq, "origin": freq(Counter(m["origin"] for m in members), 5, n),
         "race": freq(Counter(m["race"] for m in members), 5, n), "murmur": freq(Counter(m["murmur"] for m in members), 3, n),
@@ -177,6 +193,9 @@ def main():
     raw = load()
     kept = [prep(b) for b in raw if b["stats"].get("pointSpent") == 330 and b["meta"].get("views", 0) >= MIN_VIEWS and b["talents"]]
     for x in kept: x["role"] = role_of({"mantras": x["mantras"]}, x["final"], x["talents"], x["oath"])
+    # Intent roles from the authors' own tags: a "pve: boss" build also joins the bossraid clusters,
+    # a "pvp: chime" build the chime clusters (on top of its stat-shape role above).
+    kept += [dict(x, role=r) for x in kept for r in INTENT_ROLES if r in x["intent"]]
     groups = cluster(kept)
     arch = sorted((summarize(k, v, game, resolve) for k, v in groups.items()), key=lambda a: -a["views_total"])
     seen_ids = Counter()

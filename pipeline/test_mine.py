@@ -16,7 +16,7 @@ class Mine(unittest.TestCase):
         self.assertGreaterEqual(self.a["meta"]["builds_kept"], 800)
         self.assertGreaterEqual(len(self.a["archetypes"]), 15)
         roles = {x["role"] for x in self.a["archetypes"]}
-        self.assertTrue({"healer", "dps", "tank", "mage"} <= roles, roles)
+        self.assertTrue({"healer", "dps", "tank", "mage", "bossraid", "chime"} <= roles, roles)
         for x in self.a["archetypes"]:
             self.assertGreaterEqual(x["members"], 4)
             self.assertEqual(len(x["example_ids"]), min(3, x["members"]))
@@ -55,6 +55,16 @@ class Mine(unittest.TestCase):
             self.assertEqual(x["oath"][0][0], oath, x["id"])
             self.assertTrue(x["id"].endswith(oath.lower().replace(" ", "")) or x["id"].rsplit("-", 1)[-1].isdigit(), x["id"])
             self.assertEqual(sorted(x["oath"][1:], key=lambda kv: -kv[1]), x["oath"][1:], x["id"])
+
+    def test_budget_reflects_members(self):
+        # Each archetype records how many talents / obtained mantras its members typically hold, so the
+        # engine can pick like a real player instead of taking the union of everything members ever took.
+        # The builder's rule: counting talents <= 52 + (12 - normal mantras) * 2.
+        for x in self.a["archetypes"]:
+            b = x["budget"]
+            self.assertTrue(0 <= b["mantras"] <= 20, x["id"])
+            self.assertTrue(20 <= b["talents"] <= 76, x["id"])
+            self.assertLessEqual(b["talents"], 52 + (12 - b["mantras"]) * 2 + 6, x["id"])  # medians of real builds sit near the cap
 
     def test_pointsmath(self):
         from mine import points_spent, power_for
