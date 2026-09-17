@@ -300,7 +300,7 @@ export function prereqChain(name, game) {
 // is left alone; weapon and attunement stats are never trimmed. Freed points go to the stats with
 // the most room to their final target (the damage stats), keeping the pre-shrine total - and so
 // the shrine power - unchanged.
-export function tightenPreShrine(plan, talents, req, game) {
+export function tightenPreShrine(plan, talents, req, game, archetype = { talent_freq: [] }) {
   if (!plan.preShrine) return null;
   const pre = { ...plan.preShrine };
   const need = {};
@@ -309,20 +309,44 @@ export function tightenPreShrine(plan, talents, req, game) {
   if (req.oath && req.oath !== "None") consider(game.talents[`Oath: ${req.oath}`]);
   for (const m of req.must_mantras) consider(game.mantras[m]);
   let freed = 0;
+  const trimmed = []; // [stat, amount] in trim order, so unused surplus can go back where it was
   for (const s of BASE_STATS) {
     const v = pre[s] ?? 0;
     if (v <= 1 || (plan.final[s] ?? 0) >= 75) continue;
     const cap = Math.max(1, need[s] ?? 0, Math.min(v, plan.shrineBase?.[s] ?? 0) > 0 ? 1 : 0);
-    if (v > cap) { freed += v - cap; pre[s] = cap; }
+    if (v > cap) { freed += v - cap; trimmed.push([s, v - cap]); pre[s] = cap; }
   }
   if (!freed) return null;
-  let guard = 500;
-  while (freed > 0 && guard-- > 0) {
-    const s = [...WEAPON_STATS, ...ATTUNEMENTS, ...BASE_STATS].filter(x => (plan.final[x] ?? 0) > (pre[x] ?? 0) && (pre[x] ?? 0) < 100)
-      .sort((x, y) => (plan.final[y] - (pre[y] ?? 0)) - (plan.final[x] - (pre[x] ?? 0)))[0];
-    if (!s) break;
-    pre[s] = (pre[s] ?? 0) + 1; freed--;
+  // First: buy the next talent thresholds the freed points can reach (more talents before the
+  // shrine, while the card budget has room), most popular talents first. Only base-stat costs count;
+  // a talent whose other requirements the final stats don't meet is skipped.
+  const takenSet = new Set(talents);
+  let room = Math.max(0, (52 + (12 - (plan.mantraCount ?? 8)) * 2) - talents.filter(t => game.talents[resolveTalent(t, game) ?? t]?.counts).length);
+  for (const [name] of archetype.talent_freq) {
+    if (freed <= 0 || room <= 0) break;
+    const t = game.talents[name];
+    if (!t?.counts || takenSet.has(name) || name.startsWith("Oath: ") || (t.pre ?? []).some(p => !takenSet.has(resolveTalent(p, game) ?? p))) continue;
+    let cost = 0, ok = true;
+    for (const [k, v] of Object.entries(t.reqs ?? {})) {
+      const c = canon(k); if (!c) continue;
+      if (BASE_STATS.includes(c)) cost += Math.max(0, Math.min(100, Number(v)) - (pre[c] ?? 0));
+      else if ((plan.final[c] ?? 0) < Number(v)) ok = false;
+    }
+    if (!ok || cost <= 0 || cost > freed) continue;
+    for (const [k, v] of Object.entries(t.reqs ?? {})) { const c = canon(k); if (c && BASE_STATS.includes(c)) pre[c] = Math.max(pre[c] ?? 0, Math.min(100, Number(v))); }
+    freed -= cost; room--; takenSet.add(name);
   }
+  // Whatever is left is simply not invested before the shrine (the minimum power to shrine is 8;
+  // every point locked in pre-shrine only raises floors the build can't undo). If that would fall
+  // below Power 8, the remainder goes back where the archetype's players had it - moving it into
+  // other stats would reshape the shrine's floors in ways no real build does.
+  const MIN_SHRINE_POWER = 8;
+  for (const [s, amount] of trimmed) {
+    if (freed <= 0 || powerFor(pre) >= MIN_SHRINE_POWER) break;
+    const give = Math.min(amount, freed, Math.max(0, pointsForPower(MIN_SHRINE_POWER) - pointsSpent(pre)));
+    pre[s] += give; freed -= give;
+  }
+  if (powerFor(pre) < MIN_SHRINE_POWER) return null; // couldn't hold Power 8: keep the original plan
   return pre;
 }
 
@@ -1048,7 +1072,7 @@ export function assemble(partialRequest, archetypes, game) {
   // pre-shrine floors instead. The Shrine of Order conserves points either way; this just stops
   // parking them in a stat nothing uses. Kept only if the replanned build loses no talent.
   {
-    const tightened = tightenPreShrine(plan, talentsResult.talents, req, game);
+    const tightened = tightenPreShrine({ ...plan, mantraCount: plannedMantraCount(req, archetype, game) }, talentsResult.talents, req, game, archetype);
     if (tightened) {
       const plan2 = planStats(req, archetype, game, { preOverride: tightened });
       const base2 = { ...baseDraft, final: plan2.final, preShrine: plan2.preShrine, shrine: !!plan2.preShrine };
@@ -1057,7 +1081,10 @@ export function assemble(partialRequest, archetypes, game) {
       const talents2 = pickTalents(req, archetype, draft2, game);
       const counting = r => r.talents.filter(t => game.talents[resolveTalent(t, game) ?? t]?.counts).length;
       const musts = req.must_talents.map(n => resolveTalent(n, game)).filter(Boolean);
-      if (counting(talents2) >= counting(talentsResult) && musts.every(m => talents2.talents.includes(m)) && talents2.dropped.length <= talentsResult.dropped.length) {
+      // ... and it must not score worse: the meta score (stat spread, core talents, core mantras)
+      const scoreOf = (pl, dr, tr) => { const m = pickMantras(req, archetype, { ...dr, talents: tr.talents, mantras: [] }, game); return scoreBuild({ ...dr, final: pl.final, talents: tr.talents, mantras: m.mantras }, archetype, game).score; };
+      if (counting(talents2) >= counting(talentsResult) && musts.every(m => talents2.talents.includes(m)) && talents2.dropped.length <= talentsResult.dropped.length
+          && scoreOf(plan2, draft2, talents2) >= scoreOf(plan, talentDraft, talentsResult)) {
         for (const s of BASE_STATS) if ((plan.preShrine[s] ?? 0) !== (tightened[s] ?? 0)) plan2.notes.push(`${s} pre-shrine ${plan.preShrine[s]} -> ${tightened[s]}: the highest threshold your talents need`);
         plan = plan2; talentsResult = talents2; Object.assign(gear, gear2);
         Object.assign(talentDraft, draft2);

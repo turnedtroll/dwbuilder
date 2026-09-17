@@ -180,7 +180,8 @@ test("or-alternative and pseudo-stat requirements are planned (Silentheart's Agi
 test("pre-shrine coherence: a base stat is levelled only as far as the taken talents need before the shrine", () => {
   const b = assemble({ role: "dps", include_attunements: ["Galebreathe"], weapon_type: "heavy", weapon: "Withered Gale Pale", oath: "Oathless", origin: "Lone Warrior", must_talents: ["Ghost"], multifaceted: true }, A, game);
   const needAgi = Math.max(0, ...b.talents.map(t => game.talents[t]?.reqs?.Agility ?? 0));
-  assert.ok(b.preShrine.Agility <= Math.max(needAgi, 1), `pre Agility ${b.preShrine.Agility} but the kit's top Agility threshold is ${needAgi}`);
+  // a few points may return to the stat to hold Power 8 (135 points), never the old 91
+  assert.ok(b.preShrine.Agility <= needAgi + 10, `pre Agility ${b.preShrine.Agility} but the kit's top Agility threshold is ${needAgi}`);
   assert.ok(b.preShrine.Agility >= needAgi, "still reaches every taken Agility talent");
   assert.ok(b.validation.ok && b.meta_score >= 85, `${b.meta_score}`);
 });
