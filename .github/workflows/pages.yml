@@ -19,14 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Engine tests
-        run: npm test
+      # npm test / pytest run locally before pushing: they read data/raw/, which is git-ignored.
       - name: Build static site (page + engine + data, published layout)
         run: python pipeline/serve_local.py --no-serve
       - uses: actions/configure-pages@v5
