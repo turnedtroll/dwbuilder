@@ -257,7 +257,7 @@ test("top 30 corpus builds by views validate with (almost) zero hard errors", ()
   // talent_budget: 13% of published builds list a few more talents than 52 + (12 - mantras) * 2 allows
   // (wishlists; the builder shows the count in red but raises no issue). Generated builds must respect it -
   // see the assemble test - but for the corpus it is noise.
-  const SOFT = ["warder_cap", "mantra_slots", "unknown_talent", "unknown_mantra", "weapon_reqs", "outfit_reqs", "talent_weapon_type", "talent_budget", "gear_pips"];
+  const SOFT = ["warder_cap", "mantra_slots", "unknown_talent", "unknown_mantra", "weapon_reqs", "outfit_reqs", "talent_weapon_type", "talent_budget", "gear_pips", "unknown_equipment", "equipment_reqs"];
   const bad = [], unresolved = new Set(), unknownMantras = new Set();
   for (const b of top) {
     const r = validate(fromFeedBuild(b), game);

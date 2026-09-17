@@ -9,7 +9,8 @@ class SlimData(unittest.TestCase):
             cls.g = json.load(f)
 
     def test_sizes(self):
-        self.assertLess(os.path.getsize(os.path.join(ROOT, "data", "game.json")), 400_000)
+        # budget raised from 400 KB once per-alternative weaponType and equipment innate pip layouts were added
+        self.assertLess(os.path.getsize(os.path.join(ROOT, "data", "game.json")), 450_000)
         self.assertGreater(len(self.g["talents"]), 890)
         self.assertGreater(len(self.g["mantras"]), 230)
 

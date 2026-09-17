@@ -727,22 +727,32 @@ const PIP_PLAN = {
   Head: ["Health", "Physical Armor"], Arms: ["Health", "Physical Armor"], Legs: ["Health", "Ether"], Torso: ["Health", "Ether"],
   Rings: ["Health", "Posture"], Face: ["Ether", "Sanity"], Earrings: ["Ether", "Sanity"],
 };
-function itemFor(name, slot, archetype) {
-  const sig = archetype.gear_pips?.[slot];
-  const rarities = (sig?.pips ?? [["Health", "Rare"], ["Health", "Rare"], ["Health", "Rare"]]).map(([, r]) => r);
+// Pip layout is fixed per item and validated by the builder's server when saving: the item's
+// innate pips (their rarities from game data) come first, then the star pips - 2 stars add
+// Rare, Rare; 3 stars add Rare, Rare, Legendary. Stats are ours to choose (Health-first).
+export const STAR_PIPS = { 0: [], 1: ["Rare"], 2: ["Rare", "Rare"], 3: ["Rare", "Rare", "Legendary"] };
+export function pipLayout(name, stars, game) {
+  return [...(game.equipment[name]?.innate_pips ?? []), ...(STAR_PIPS[stars] ?? STAR_PIPS[3])];
+}
+function itemFor(name, slot, archetype, game) {
+  const stars = archetype.gear_pips?.[slot]?.stars ?? 3;
+  const rarities = pipLayout(name, stars, game);
   const [major, minor] = PIP_PLAN[slot] ?? ["Health", "Ether"];
   const pips = rarities.map((rarity, i) => ({ stat: rarities.length >= 3 && i === rarities.length - 1 ? minor : major, rarity }));
-  return { name, qualityStars: sig?.stars ?? 3, pips, enchant: "" };
+  return { name, qualityStars: stars, pips, enchant: "" };
 }
 function pickEquipment(archetype, final, game) {
-  const okItem = name => name && meetsStats(final, game.equipment[name]?.reqs ?? {});
+  // Only items the game data knows and can equip (the builder's server rejects a save with an
+  // unknown or cosmetic item name) and whose requirements the final stats meet. mine.py pads each
+  // slot's list with globally popular items (frequency 0) so there is always something to fall to.
+  const okItem = name => !!name && !!game.equipment[name] && meetsStats(final, game.equipment[name].reqs ?? {});
   const equipment = {};
   for (const slot of EQUIP_SLOTS) {
     const top = (archetype.equipment?.[slot] ?? []).map(([n]) => n).find(okItem);
-    equipment[slot] = top ? itemFor(top, slot, archetype) : null;
+    equipment[slot] = top ? itemFor(top, slot, archetype, game) : null;
   }
   const rings = (archetype.equipment?.Rings ?? []).map(([n]) => n).filter(okItem);
-  equipment.Rings = [0, 1, 2, 3].map(i => rings[i] ? itemFor(rings[i], "Rings", archetype) : null);
+  equipment.Rings = [0, 1, 2, 3].map(i => rings[i] ? itemFor(rings[i], "Rings", archetype, game) : null);
   return equipment;
 }
 

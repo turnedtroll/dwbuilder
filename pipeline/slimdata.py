@@ -70,7 +70,14 @@ def main():
                               "type": m.get("type") or "Normal", "desc": short(m.get("description")), "modifiers": list(m.get("modifiers") or [])}
     weapons = {w["name"]: {"type": w.get("type"), "wtype": wtype(w), "reqs": reqs_of(w), "talents": list(w.get("grantedTalents") or [])} for w in D["weapons"] if not is_voi(w)}
     outfits = {o["name"]: {"reqs": reqs_of(o), "origin": (o.get("requirements") or {}).get("origin"), "talents": list(o.get("grantedTalents") or [])} for o in D["outfits"] if not is_voi(o)}
-    equipment = {e["name"]: {"slot": e.get("type"), "talents": list(e.get("innateTalents") or []), "reqs": reqs_of(e)} for e in g["equipmentData"] if not is_voi(e)}
+    # innate_pips: the item's fixed pip rarities in order (the builder's server validates each pip's
+    # rarity: innate pips first, then the star pips - 2 stars add Rare, Rare; 3 stars add Rare, Rare, Legendary).
+    def equip_entry(e):
+        out = {"slot": e.get("type"), "talents": list(e.get("innateTalents") or []), "reqs": reqs_of(e)}
+        pips = [grp.get("rarity", "Rare") for grp in (e.get("innatePips") or []) for _ in range(int(grp.get("count") or 1))]
+        if pips: out["innate_pips"] = pips
+        return out
+    equipment = {e["name"]: equip_entry(e) for e in g["equipmentData"] if e and not is_voi(e) and e.get("equippable", True)}  # cosmetics (equippable false) can't be saved on a build
     oaths = {o["name"]: {"slots": o.get("slots") or {}, "mantras": o.get("mantras") or {}} for o in g["oathsData"]}
     races = {a["name"]: a.get("statBonuses") or {} for a in g["aspectsData"]}
     # enumerations come from the build corpus (the builder keeps them in UI code, not game data)

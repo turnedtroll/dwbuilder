@@ -72,7 +72,7 @@ def load():
 
 # Chime (of Conflict) builds are an intent players tag themselves. Boss raid is Deepwoken slang for
 # a self-sufficient hybrid - good health, good damage AND healing - so it is a stat/kit signature.
-GLOBAL_ENCHANT, GLOBAL_STAR_MOD = {}, {}  # per weapon type, filled in main() from the whole corpus
+GLOBAL_ENCHANT, GLOBAL_STAR_MOD, GLOBAL_EQUIP = {}, {}, {}  # filled in main() from the whole corpus
 INTENT_TAGS = {"pvp: chime": "chime"}
 INTENT_ROLES = ("chime",)
 HEAL_MANTRAS = {"Graceful Flame", "Command: Live", "Symbiotic Sustain", "Alsin's Aid", "Rally", "Parasitic Leech", "Shade Devour"}
@@ -169,8 +169,14 @@ def summarize(key, members, game, resolve):
         for m in members:
             v = m["equipment"].get(slot)
             for item in (v if isinstance(v, list) else [v]):
-                if isinstance(item, dict) and item.get("name"): c[item["name"]] += 1
+                if isinstance(item, dict) and item.get("name") and item["name"] in game["equipment"]: c[item["name"]] += 1  # current, equippable items only
         equip[slot] = freq(c, 6, n)
+        # pad with the corpus-wide favourites (frequency 0) so the engine always has a valid fall-back
+        want = 8 if slot == "Rings" else 6
+        have = {k for k, _ in equip[slot]}
+        for name in GLOBAL_EQUIP.get(slot, []):
+            if len(equip[slot]) >= want: break
+            if name not in have: equip[slot].append([name, 0.0]); have.add(name)
     # Stars and pips per slot: the most common exact pip signature among members' 3-star items in
     # that slot (fallback: any stars), so gear comes with the stats real builds roll on it.
     gear_pips = {}
@@ -232,6 +238,13 @@ def main():
     kept = [prep(b) for b in raw if b["stats"].get("pointSpent") == 330 and b["meta"].get("views", 0) >= MIN_VIEWS and b["talents"]]
     for x in kept: x["role"] = role_of({"mantras": x["mantras"]}, x["final"], x["talents"], x["oath"])
     GLOBAL_ENCHANT["none"] = Counter(x["enchant"] for x in kept if x["enchant"]).most_common(1)[0][0]  # any weapon type
+    for slot in ("Head", "Arms", "Legs", "Torso", "Face", "Earrings", "Rings"):
+        c = Counter()
+        for x in kept:
+            v = x["equipment"].get(slot)
+            for item in (v if isinstance(v, list) else [v]):
+                if isinstance(item, dict) and item.get("name") and item["name"] in game["equipment"]: c[item["name"]] += 1
+        GLOBAL_EQUIP[slot] = [k for k, _ in c.most_common(12)]
     for wt in ("light", "medium", "heavy"):
         ench = Counter(x["enchant"] for x in kept if x["wtype"] == wt and x["enchant"])
         if ench: GLOBAL_ENCHANT[wt] = ench.most_common(1)[0][0]

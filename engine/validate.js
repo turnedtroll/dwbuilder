@@ -344,8 +344,13 @@ export function validate(core, game) {
     for (const it of (Array.isArray(item) ? item : [item])) {
       if (!it?.name) continue;
       const e = game.equipment[it.name];
-      if (!e) { warn("unknown_equipment", `${slot}: ${it.name}`); continue; }
+      if (!e) { err("unknown_equipment", `${slot}: ${it.name} is not a current item (the builder won't save it)`); continue; }
       if (!meetsStats(core.final, e.reqs ?? {})) err("equipment_reqs", `${slot}: ${it.name} needs ${Object.entries(e.reqs).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+      // the builder's server rejects a save whose pip rarities don't follow innate pips + star pips
+      const STAR = { 0: [], 1: ["Rare"], 2: ["Rare", "Rare"], 3: ["Rare", "Rare", "Legendary"] };
+      const want = [...(e.innate_pips ?? []), ...(STAR[it.qualityStars] ?? [])];
+      const got = (it.pips ?? []).map(p => p.rarity);
+      if (want.length && got.join() !== want.join()) err("gear_pips", `${slot}: ${it.name}: pip rarities ${got.join("/") || "none"} should be ${want.join("/")}`);
     }
   }
   const tv = Object.values(core.traits ?? {}).map(Number);

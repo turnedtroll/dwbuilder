@@ -137,7 +137,11 @@ test("equipment requirements and trait caps are respected on every default build
   for (const a of A) {
     const b = assemble({ role: a.role, oath: a.oath[0]?.[0] ?? null }, [a], game);
     const items = [...Object.entries(b.equipment).filter(([k]) => k !== "Rings").map(([, v]) => v), ...(b.equipment.Rings ?? [])].filter(Boolean);
-    for (const it of items) assert.ok(meetsStats(b.final, game.equipment[it.name]?.reqs ?? {}), `${a.id}: ${it.name} needs ${JSON.stringify(game.equipment[it.name]?.reqs)}`);
+    assert.equal(items.length, 10, `${a.id}: every gear slot filled (${items.length}/10)`);
+    for (const it of items) {
+      assert.ok(game.equipment[it.name], `${a.id}: ${it.name} is not a current equippable item`);
+      assert.ok(meetsStats(b.final, game.equipment[it.name]?.reqs ?? {}), `${a.id}: ${it.name} needs ${JSON.stringify(game.equipment[it.name]?.reqs)}`);
+    }
     const tv = Object.values(b.traits);
     assert.ok(tv.every(v => v >= 0 && v <= 6) && tv.reduce((x, y) => x + y, 0) <= 12, `${a.id}: traits ${JSON.stringify(b.traits)}`);
     assert.ok(!b.validation.errors.some(e => e.code === "equipment_reqs" || e.code === "traits"), a.id);
