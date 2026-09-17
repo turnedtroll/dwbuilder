@@ -83,6 +83,21 @@ test("assemble: every archetype's default request is valid; meta score >= 70 for
   assert.ok(low.length <= Math.floor(A.length * 0.03), JSON.stringify(low, null, 1));
 });
 
+test("R7: fitTo330 relaxes an unfit oath floor instead of throwing", () => {
+  // The attunementless tank medoid's shrine-pinned floor (307 of 330) leaves no room for Oath:
+  // Visionshaper's Charisma 50. An explicit oath is honoured as-is (R2), so planStats must relax the
+  // oath floor with a note rather than throw; validate() then reports the unmet oath_reqs honestly.
+  const a = A.find(x => x.id.startsWith("tank-none-") && x.oath[0]?.[0] !== "Visionshaper");
+  assert.ok(a, "attunementless tank archetype not found");
+  const req = normalizeRequest({ role: a.role, oath: "Visionshaper" });
+  let p;
+  assert.doesNotThrow(() => { p = planStats(req, a, game); });
+  assert.equal(pointsSpent(p.final), 330);
+  assert.deepEqual(p.notes.filter(n => n.includes("could not fit")), ["could not fit oath's requirements in 330 points"]);
+  const b = assemble({ role: a.role, oath: "Visionshaper" }, [a], game);
+  assert.ok(b.validation.errors.some(e => e.code === "oath_reqs"), JSON.stringify(b.validation.errors));
+});
+
 test("assemble: attunement include/exclude and weapon types stay valid", () => {
   const combos = [];
   for (const role of ["healer", "dps", "tank", "mage"]) for (const att of ATTUNEMENTS) combos.push({ role, include_attunements: [att] }, { role, exclude_attunements: [att] });

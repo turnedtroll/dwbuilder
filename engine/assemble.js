@@ -334,17 +334,27 @@ export function planStats(req, archetype, game) {
   }
 
   // 5. must-haves (resolve corpus/user spelling before reading game.json)
-  const mustMin = zeroFlat();
+  // R7: kept as three separate per-source floors (rather than one combined mustMin) so a
+  // budget-infeasible combination can be relaxed one source at a time in step 8 instead of throwing.
+  const mustMinMantras = zeroFlat();
+  const mustMinTalents = zeroFlat();
+  const mustMinOath = zeroFlat();
   for (const tName of req.must_talents) {
     const resolved = resolveTalent(tName, game);
     if (!resolved) { notes.push(`unknown talent ${tName} ignored`); continue; }
-    applyReqs(game.talents[resolved]?.reqs, target, mustMin);
+    applyReqs(game.talents[resolved]?.reqs, target, mustMinTalents);
   }
   for (const mName of req.must_mantras) {
     const m = game.mantras[mName];
     if (!m) { notes.push(`unknown mantra ${mName} ignored`); continue; }
-    applyReqs(m.reqs, target, mustMin);
+    applyReqs(m.reqs, target, mustMinMantras);
   }
+  // R2: the resolved oath (see resolveOath in assemble()) is a must-have exactly like a must talent -
+  // its own stat reqs must raise target/mustMin so the plan actually reaches them, not just the
+  // prerequisite talents pickTalents prioritizes for it below.
+  if (req.oath && req.oath !== "None") applyReqs(game.talents[`Oath: ${req.oath}`]?.reqs, target, mustMinOath);
+  const mustMin = zeroFlat();
+  for (const s of ALL_STATS) mustMin[s] = Math.max(mustMinMantras[s] ?? 0, mustMinTalents[s] ?? 0, mustMinOath[s] ?? 0);
 
   // 6. stack minimum + racial bonus floors
   if (pre) pre[a.stack.stat] = Math.max(pre[a.stack.stat] ?? 0, a.stack.min);
@@ -379,17 +389,36 @@ export function planStats(req, archetype, game) {
   for (const s of ALL_STATS) if (mustMin[s] > 0) priority.add(s);
   for (const incRaw of req.include_attunements) priority.add(canon(incRaw) ?? incRaw);
 
-  const floor330 = {};
-  for (const s of ALL_STATS) {
-    const stackFloor = s === a.stack.stat ? Math.min(target[s] ?? 0, a.stack.modal - 25) : 0;
-    floor330[s] = Math.max(0, shrineBase?.[s] ?? 0, bonus[s] ?? 0, mustMin[s] ?? 0, stackFloor);
-  }
+  // R7: must/oath floors are layered by source (mantras, then talents, then oath) so a
+  // budget-infeasible combination degrades instead of throwing. Race-bonus and shrine-base floors
+  // are never relaxed. `relaxedCount` sources (from the front of this list) are excluded from the
+  // floor on each retry after fitTo330 reports it cannot fit.
+  const relaxOrder = [
+    { label: "must_mantras", src: mustMinMantras },
+    { label: "must_talents", src: mustMinTalents },
+    { label: "oath", src: mustMinOath },
+  ].filter(({ src }) => ALL_STATS.some(s => (src[s] ?? 0) > 0)); // only sources that actually add a floor
+  const floor330For = relaxedCount => {
+    const floor330 = {};
+    for (const s of ALL_STATS) {
+      const stackFloor = s === a.stack.stat ? Math.min(target[s] ?? 0, a.stack.modal - 25) : 0;
+      let mustFloor = 0;
+      for (let i = relaxedCount; i < relaxOrder.length; i++) mustFloor = Math.max(mustFloor, relaxOrder[i].src[s] ?? 0);
+      floor330[s] = Math.max(0, shrineBase?.[s] ?? 0, bonus[s] ?? 0, mustFloor, stackFloor);
+    }
+    return floor330;
+  };
 
-  let fit;
-  try {
-    fit = fitTo330(target, floor330, priority, a.post_shrine_spread, a.stack.stat);
-  } catch (e) {
-    throw new Error(`${a.id}: ${e.message}`);
+  let fit, relaxedCount = 0;
+  for (;;) {
+    try {
+      fit = fitTo330(target, floor330For(relaxedCount), priority, a.post_shrine_spread, a.stack.stat);
+      break;
+    } catch (e) {
+      if (relaxedCount >= relaxOrder.length) throw new Error(`${a.id}: ${e.message}`);
+      notes.push(`could not fit ${relaxOrder[relaxedCount].label}'s requirements in 330 points`);
+      relaxedCount++;
+    }
   }
   const final = fit.final;
 
@@ -423,9 +452,16 @@ export function pickTalents(req, archetype, coreDraft, game) {
   }
   const mustSet = new Set(mustResolved);
 
+  // R2: the resolved oath's own prerequisite talents go to the very front of the candidate list -
+  // ahead of must_talents - so they're taken first when obtainable. Filter out path entries (a
+  // prerequisite that is itself "Oath: "/"Murmur: ", e.g. Oath: Contractor's self-reference) since
+  // those are never real, pickable talents.
+  const oathTalent = req.oath && req.oath !== "None" ? game.talents[`Oath: ${req.oath}`] : null;
+  const oathPre = (oathTalent?.pre ?? []).filter(p => !p.startsWith("Oath: ") && !p.startsWith("Murmur: "));
+
   const seen = new Set();
   const candidates = [];
-  for (const n of [...mustResolved, ...archetype.talent_freq.map(([x]) => x)]) {
+  for (const n of [...oathPre, ...mustResolved, ...archetype.talent_freq.map(([x]) => x)]) {
     const r = resolve(n);
     if (seen.has(r) || avoidSet.has(r)) continue;
     seen.add(r);
@@ -751,10 +787,42 @@ export function buildGuide(build, game) {
 // first (only needs `final`), then talents (needs origin/oath/outfit/weapon/equipment for
 // talentObtainable's origin/oath/aspect checks and grantedTalents), then mantras (needs the settled
 // talent list for mantraSlots' Neuroplasticity/Will o' Wisp/Chorus of Souls bonuses).
+// R2/R3: resolve the oath the build will actually use before planStats runs, so planStats can plan
+// stats for its requirements and pickGear/pickTalents see the exact same value (previously pickGear
+// alone resolved `req.oath ?? archetype.oath[0]?.[0] ?? "None"`, so nothing upstream ever knew what
+// oath the build would end up with). An explicit req.oath is always honoured as-is - validate() will
+// report oath_reqs if it's unsatisfiable, and that's the user's call. Only the archetype-default case
+// falls through the archetype's oath list past any oath whose own stat reqs touch an excluded (or,
+// under attunementless, any) attunement.
+function resolveOath(req, archetype, game) {
+  if (req.oath) return { oath: req.oath, note: null };
+  const candidates = (archetype.oath ?? []).map(([name]) => name);
+  if (!candidates.length) return { oath: "None", note: null };
+  const conflictStat = name => {
+    const reqs = game.talents[`Oath: ${name}`]?.reqs ?? {};
+    for (const k of Object.keys(reqs)) {
+      const c = canon(k);
+      if (!c || !ATTUNEMENTS.includes(c)) continue;
+      if (req.attunementless) return c;
+      if (req.exclude_attunements.some(ex => (canon(ex) ?? ex) === c)) return c;
+    }
+    return null;
+  };
+  const top = candidates[0];
+  const topConflict = conflictStat(top);
+  if (!topConflict) return { oath: top, note: null };
+  const fallback = candidates.slice(1).find(name => !conflictStat(name));
+  const oath = fallback ?? "None";
+  return { oath, note: `oath ${top} replaced by ${oath} (requires excluded ${topConflict})` };
+}
+
 export function assemble(partialRequest, archetypes, game) {
   const req = normalizeRequest(partialRequest);
   const { archetype, adapted } = selectArchetype(req, archetypes);
+  const { oath: resolvedOath, note: oathNote } = resolveOath(req, archetype, game);
+  req.oath = resolvedOath;
   const plan = planStats(req, archetype, game);
+  if (oathNote) plan.notes.push(oathNote);
 
   const shrine = !!plan.preShrine;
   const baseDraft = { final: plan.final, preShrine: plan.preShrine, shrine, race: plan.race, multifaceted: plan.multifaceted };
