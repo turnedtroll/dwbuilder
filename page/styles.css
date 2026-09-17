@@ -134,7 +134,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent);
 .examples a { font-family: var(--font-mono); font-size: 13px; margin-right: 8px; }
 
 .actions {
-  position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
   padding: 10px 20px; background: var(--surface-2); border-bottom: 1px solid var(--line);
 }
 .actions .spacer { flex: 1; }
