@@ -177,6 +177,14 @@ test("or-alternative and pseudo-stat requirements are planned (Silentheart's Agi
   assert.ok(!g.validation.errors.some(e => e.code === "weapon_reqs"), JSON.stringify(g.validation.errors));
 });
 
+test("pre-shrine coherence: a base stat is levelled only as far as the taken talents need before the shrine", () => {
+  const b = assemble({ role: "dps", include_attunements: ["Galebreathe"], weapon_type: "heavy", weapon: "Withered Gale Pale", oath: "Oathless", origin: "Lone Warrior", must_talents: ["Ghost"], multifaceted: true }, A, game);
+  const needAgi = Math.max(0, ...b.talents.map(t => game.talents[t]?.reqs?.Agility ?? 0));
+  assert.ok(b.preShrine.Agility <= Math.max(needAgi, 1), `pre Agility ${b.preShrine.Agility} but the kit's top Agility threshold is ${needAgi}`);
+  assert.ok(b.preShrine.Agility >= needAgi, "still reaches every taken Agility talent");
+  assert.ok(b.validation.ok && b.meta_score >= 85, `${b.meta_score}`);
+});
+
 test("R7: fitTo330 relaxes a truly unfit floor instead of throwing, and says so", () => {
   // Five Unbounded talents at 75 each = 375 points: impossible, so the planner degrades with a
   // "could not fit" note instead of crashing, and validation reports what is unmet.

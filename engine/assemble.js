@@ -295,6 +295,37 @@ export function prereqChain(name, game) {
   return out;
 }
 
+// Trim a planned pre-shrine block to what the taken talents need. Returns the new block, or null
+// when nothing changes. Base stats only; a stat the archetype's players stack (final target 75+)
+// is left alone; weapon and attunement stats are never trimmed. Freed points go to the stats with
+// the most room to their final target (the damage stats), keeping the pre-shrine total - and so
+// the shrine power - unchanged.
+export function tightenPreShrine(plan, talents, req, game) {
+  if (!plan.preShrine) return null;
+  const pre = { ...plan.preShrine };
+  const need = {};
+  const consider = t => { for (const [k, v] of Object.entries(t?.reqs ?? {})) { const c = canon(k); if (c) need[c] = Math.max(need[c] ?? 0, Math.min(100, Number(v))); } };
+  for (const t of talents) consider(game.talents[resolveTalent(t, game) ?? t]);
+  if (req.oath && req.oath !== "None") consider(game.talents[`Oath: ${req.oath}`]);
+  for (const m of req.must_mantras) consider(game.mantras[m]);
+  let freed = 0;
+  for (const s of BASE_STATS) {
+    const v = pre[s] ?? 0;
+    if (v <= 1 || (plan.final[s] ?? 0) >= 75) continue;
+    const cap = Math.max(1, need[s] ?? 0, Math.min(v, plan.shrineBase?.[s] ?? 0) > 0 ? 1 : 0);
+    if (v > cap) { freed += v - cap; pre[s] = cap; }
+  }
+  if (!freed) return null;
+  let guard = 500;
+  while (freed > 0 && guard-- > 0) {
+    const s = [...WEAPON_STATS, ...ATTUNEMENTS, ...BASE_STATS].filter(x => (plan.final[x] ?? 0) > (pre[x] ?? 0) && (pre[x] ?? 0) < 100)
+      .sort((x, y) => (plan.final[y] - (pre[y] ?? 0)) - (plan.final[x] - (pre[x] ?? 0)))[0];
+    if (!s) break;
+    pre[s] = (pre[s] ?? 0) + 1; freed--;
+  }
+  return pre;
+}
+
 // Pseudo stats resolve to the group member the target already favours (Mind -> the highest of
 // Int/Will/Cha, Body -> Str/Agi/Fort, Weapon -> the weapon stats, Attunement -> the attunements).
 // Power is always met at 330 points. Requirements above 100 are unreachable (joke items) and are
@@ -322,7 +353,7 @@ function applyTalentReqs(t, target, mustMin) {
   applyReqs(alts.sort((a, b) => cost(a) - cost(b))[0].reqs, target, mustMin);
 }
 
-export function planStats(req, archetype, game) {
+export function planStats(req, archetype, game, { preOverride = null } = {}) {
   const a = archetype;
   const notes = [];
 
@@ -441,7 +472,7 @@ export function planStats(req, archetype, game) {
     for (const s of ALL_STATS) floor[s] = Math.max(0, bonus[s] ?? 0, target[s] > 0 ? 1 : 0);
     if (investMust) for (const s of ALL_STATS) if ((mustMin[s] ?? 0) > 0) { pre[s] = Math.max(pre[s] ?? 0, Math.min(100, mustMin[s])); floor[s] = Math.max(floor[s], Math.min(100, mustMin[s])); }
 
-    pre = fitPreToBudget(pre, budget, floor, target, a.stack);
+    pre = preOverride ? { ...preOverride } : fitPreToBudget(pre, budget, floor, target, a.stack);
     const pts = pointsSpent(pre);
     if (pts > budget + 14) notes.push("pre-shrine points exceed the target power");
     else if (pts < budget) notes.push("pre-shrine points remain under the target power budget");
@@ -1000,7 +1031,7 @@ export function assemble(partialRequest, archetypes, game) {
   const { archetype, adapted } = selectArchetype(req, archetypes, game);
   const { oath: resolvedOath, note: oathNote } = resolveOath(req, archetype, game);
   req.oath = resolvedOath;
-  const plan = planStats(req, archetype, game);
+  let plan = planStats(req, archetype, game);
   if (oathNote) plan.notes.push(oathNote);
 
   const shrine = !!plan.preShrine;
@@ -1009,7 +1040,31 @@ export function assemble(partialRequest, archetypes, game) {
   const gear = pickGear(req, archetype, baseDraft, game);
 
   const talentDraft = { ...baseDraft, origin: gear.origin, oath: gear.oath, outfit: gear.outfit, weapon: gear.weapon, equipment: gear.equipment, talents: [] };
-  const talentsResult = pickTalents(req, archetype, talentDraft, game);
+  let talentsResult = pickTalents(req, archetype, talentDraft, game);
+
+  // Pre-shrine coherence: a base stat is levelled before the shrine only as far as the highest
+  // threshold the TAKEN talents need (Agility 75 when the kit stops at Down Comes the Claw, not
+  // 91), unless the archetype stacks it on purpose (75+). The surplus goes to the damage stats'
+  // pre-shrine floors instead. The Shrine of Order conserves points either way; this just stops
+  // parking them in a stat nothing uses. Kept only if the replanned build loses no talent.
+  {
+    const tightened = tightenPreShrine(plan, talentsResult.talents, req, game);
+    if (tightened) {
+      const plan2 = planStats(req, archetype, game, { preOverride: tightened });
+      const base2 = { ...baseDraft, final: plan2.final, preShrine: plan2.preShrine, shrine: !!plan2.preShrine };
+      const gear2 = pickGear(req, archetype, base2, game); // weapon/outfit/equipment re-chosen against the new stats
+      const draft2 = { ...base2, origin: gear2.origin, oath: gear2.oath, outfit: gear2.outfit, weapon: gear2.weapon, equipment: gear2.equipment, talents: [] };
+      const talents2 = pickTalents(req, archetype, draft2, game);
+      const counting = r => r.talents.filter(t => game.talents[resolveTalent(t, game) ?? t]?.counts).length;
+      const musts = req.must_talents.map(n => resolveTalent(n, game)).filter(Boolean);
+      if (counting(talents2) >= counting(talentsResult) && musts.every(m => talents2.talents.includes(m)) && talents2.dropped.length <= talentsResult.dropped.length) {
+        for (const s of BASE_STATS) if ((plan.preShrine[s] ?? 0) !== (tightened[s] ?? 0)) plan2.notes.push(`${s} pre-shrine ${plan.preShrine[s]} -> ${tightened[s]}: the highest threshold your talents need`);
+        plan = plan2; talentsResult = talents2; Object.assign(gear, gear2);
+        Object.assign(talentDraft, draft2);
+        baseDraft.final = plan.final; baseDraft.preShrine = plan.preShrine; baseDraft.shrine = !!plan.preShrine;
+      }
+    }
+  }
 
   const mantraDraft = { ...talentDraft, talents: talentsResult.talents, mantras: [] };
   const mantrasResult = pickMantras(req, archetype, mantraDraft, game);
