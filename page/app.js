@@ -159,10 +159,13 @@ function showError(msg, kind = "bad") {
   const b = $("error-banner"); b.textContent = msg; b.className = `banner ${kind === "warn" ? "warn" : ""}`; b.hidden = !msg;
 }
 
-function generate() {
+// ?archetype=<id> opens that archetype's own default build (its oath, no extra constraints) - a
+// shareable link to exactly the build the page would show for it.
+function generate(archetypeId = null) {
   try {
-    const req = readRequest();
-    const build = E.assemble(req, ARCH.archetypes, GAME);
+    const one = archetypeId ? ARCH.archetypes.find(a => a.id === archetypeId) : null;
+    const req = one ? { role: one.role, oath: one.oath[0]?.[0] ?? null } : readRequest();
+    const build = E.assemble(req, one ? [one] : ARCH.archetypes, GAME);
     state.build = build; state.req = req;
     showError("");
     $("refine-section").hidden = true;
@@ -521,10 +524,12 @@ function boot() {
   setupDone(done);
 
   // The page at rest shows a real build: the most-viewed archetype's role, generated once.
-  const top = [...ARCH.archetypes].sort((a, b) => b.views_total - a.views_total)[0];
+  const wanted = new URLSearchParams(location.search).get("archetype");
+  const linked = wanted && ARCH.archetypes.find(a => a.id === wanted);
+  const top = linked ?? [...ARCH.archetypes].sort((a, b) => b.views_total - a.views_total)[0];
   if (top) $("role").value = top.role;
-  state.auto = true;
-  generate();
+  state.auto = !linked;
+  generate(linked ? linked.id : null);
   wireCapabilities(); // resolves later (or null); the page is already usable
 }
 
