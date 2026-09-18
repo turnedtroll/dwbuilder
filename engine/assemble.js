@@ -556,6 +556,19 @@ export function planStats(req, archetype, game, { preOverride = null } = {}) {
     }
   }
   const final = fit.final;
+  // An attunement at 95-99 whose archetype sits at 100 is rounded up to 100 (Hero's Blades and
+  // "Unbounded" talents need exactly 100), taking the points from the stat with the most slack
+  // above its floor and target.
+  for (const att of ATTUNEMENTS) {
+    if ((final[att] ?? 0) < 95 || (final[att] ?? 0) >= 100 || (a.post_shrine_modal[att] ?? 0) < 95) continue;
+    let need = 100 - final[att];
+    const floor = floor330For();
+    const donors = ALL_STATS.filter(s => s !== att && (final[s] ?? 0) > Math.max(floor[s] ?? 0, target[s] ?? 0, 1))
+      .sort((x, y) => (final[y] - Math.max(floor[y] ?? 0, target[y] ?? 0)) - (final[x] - Math.max(floor[x] ?? 0, target[x] ?? 0)));
+    for (const d of donors) { const give = Math.min(need, final[d] - Math.max(floor[d] ?? 0, target[d] ?? 0, 1)); final[d] -= give; final[att] += give; need -= give; if (!need) break; }
+    if (need) for (const d of ALL_STATS.filter(s => s !== att && (final[s] ?? 0) > (floor[s] ?? 0) + 1).sort((x, y) => (final[x] - (floor[x] ?? 0)) - (final[y] - (floor[y] ?? 0)))) { const give = Math.min(need, final[d] - (floor[d] ?? 0) - 1); final[d] -= give; final[att] += give; need -= give; if (!need) break; }
+    if (final[att] === 100) notes.push(`${att} rounded up to 100`);
+  }
 
   // fitTo330 reports exactly which stats it raised under ruling rules 1-2 (beyond p75, or off of 0)
   // to close a gap the archetype's sparse per-stat modal data left in the 330-point budget; record
@@ -806,9 +819,21 @@ function dominantWtype(final) {
   return best ? map[best] : null;
 }
 
+// Hero's Blades scale off their attunement alone and need it at exactly 100 - the best weapon for a
+// build that maxes an attunement but doesn't invest in a weapon stat (the most common named weapon on
+// 100-attunement builds in the corpus).
+const HERO_BLADE = { Flamecharm: "Hero's Blade of Flame", Frostdraw: "Hero's Blade of Frost", Thundercall: "Hero's Blade of Lightning", Galebreathe: "Hero's Blade of Wind", Shadowcast: "Hero's Blade of Shadow" };
+function heroBladeFor(final, game) {
+  const topW = Math.max(...WEAPON_STATS.map(w => final[w] ?? 0));
+  if (topW >= 65) return "";
+  for (const [att, name] of Object.entries(HERO_BLADE)) if ((final[att] ?? 0) >= 100 && game.weapons[name] && meetsStats(final, game.weapons[name].reqs)) return name;
+  return "";
+}
 function pickWeapon(req, archetype, final, game) {
   if (req.weapon) return req.weapon;
   if (req.weapon_type === "none") return "";
+  const hero = heroBladeFor(final, game);
+  if (hero) return hero;
   const wantType = dominantWtype(final);
   const list = archetype.weapons ?? [];
   for (const [name] of list) {

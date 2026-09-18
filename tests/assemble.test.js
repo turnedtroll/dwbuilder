@@ -186,6 +186,17 @@ test("pre-shrine coherence: a base stat is levelled only as far as the taken tal
   assert.ok(b.validation.ok && b.meta_score >= 85, `${b.meta_score}`);
 });
 
+test("a 100-attunement build with weak weapon investment arms the matching Hero's Blade (attunement rounded up from 95-99)", () => {
+  const a = A.find(x => x.id === "bossraid-none-frost-oathless");
+  const b = assemble({ role: a.role, oath: a.oath[0][0] }, [a], game);
+  assert.equal(b.final.Frostdraw, 100, `Frostdraw ${b.final.Frostdraw}`);
+  assert.equal(b.weapon, "Hero's Blade of Frost");
+  assert.ok(b.validation.ok, JSON.stringify(b.validation.errors));
+  // a Heavy 100 / Galebreathe 100 build keeps its heavy weapon: Hero's Blades don't scale with the weapon stat
+  const h = assemble({ role: "dps", include_attunements: ["Galebreathe"], weapon_type: "heavy" }, A, game);
+  assert.ok(!h.weapon.startsWith("Hero's Blade"), h.weapon);
+});
+
 test("R7: fitTo330 relaxes a truly unfit floor instead of throwing, and says so", () => {
   // Five Unbounded talents at 75 each = 375 points: impossible, so the planner degrades with a
   // "could not fit" note instead of crashing, and validation reports what is unmet.
