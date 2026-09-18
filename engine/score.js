@@ -2,8 +2,14 @@ import { ALL_STATS } from "./stats.js";
 import { resolveTalent, mantraPathWhy } from "./validate.js";
 
 export function scoreBuild(core, a, game) {
+  // Weapon stats don't count against a build whose weapon doesn't scale with them (Hero's Blades) or
+  // that has none: the reference player's leftover weapon points are not something to copy.
+  const weaponScales = core.weapon && game.weapons[core.weapon]?.wtype;
   let l1 = 0;
-  for (const s of ALL_STATS) l1 += Math.abs((core.final[s] ?? 0) - (a.post_shrine_modal[s] ?? 0));
+  for (const s of ALL_STATS) {
+    if (!weaponScales && ["Heavy Wep.", "Medium Wep.", "Light Wep."].includes(s)) continue;
+    l1 += Math.abs((core.final[s] ?? 0) - (a.post_shrine_modal[s] ?? 0));
+  }
   const spread = 50 * (1 - Math.min(1, l1 / 200));
 
   // Core = the archetype's most frequent talents, but no more than a real kit holds (the builder's

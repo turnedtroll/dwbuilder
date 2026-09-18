@@ -377,7 +377,7 @@ function applyTalentReqs(t, target, mustMin) {
   applyReqs(alts.sort((a, b) => cost(a) - cost(b))[0].reqs, target, mustMin);
 }
 
-export function planStats(req, archetype, game, { preOverride = null } = {}) {
+export function planStats(req, archetype, game, { preOverride = null, targetCaps = null } = {}) {
   const a = archetype;
   const notes = [];
 
@@ -395,6 +395,9 @@ export function planStats(req, archetype, game, { preOverride = null } = {}) {
   else if (!req.shrine) notes.push("pre-shrine skipped: shrine disabled by request");
   else if (preAllZero) notes.push("pre-shrine skipped: no pre-shrine data for this archetype");
   else pre = preSeed;
+
+  // 2b. caller-imposed ceilings (e.g. weapon stats when the weapon doesn't scale with them)
+  if (targetCaps) for (const [st, cap] of Object.entries(targetCaps)) { if ((target[st] ?? 0) > cap) { target[st] = cap; if (pre) pre[st] = cap === 0 ? 0 : Math.min(pre[st] ?? 0, cap); } }
 
   // 3. excludes / attunementless / includes
   for (const exRaw of req.exclude_attunements) {
@@ -497,6 +500,7 @@ export function planStats(req, archetype, game, { preOverride = null } = {}) {
     if (investMust) for (const s of ALL_STATS) if ((mustMin[s] ?? 0) > 0) { pre[s] = Math.max(pre[s] ?? 0, Math.min(100, mustMin[s])); floor[s] = Math.max(floor[s], Math.min(100, mustMin[s])); }
 
     pre = preOverride ? { ...preOverride } : fitPreToBudget(pre, budget, floor, target, a.stack);
+    if (preOverride && targetCaps) for (const [st, cap] of Object.entries(targetCaps)) pre[st] = cap === 0 ? 0 : Math.min(pre[st] ?? 0, cap);
     const pts = pointsSpent(pre);
     if (pts > budget + 14) notes.push("pre-shrine points exceed the target power");
     else if (pts < budget) notes.push("pre-shrine points remain under the target power budget");
@@ -1098,8 +1102,21 @@ export function assemble(partialRequest, archetypes, game) {
   // parking them in a stat nothing uses. Kept only if the replanned build loses no talent.
   {
     const tightened = tightenPreShrine({ ...plan, mantraCount: plannedMantraCount(req, archetype, game) }, talentsResult.talents, req, game, archetype);
-    if (tightened) {
-      const plan2 = planStats(req, archetype, game, { preOverride: tightened });
+    // Weapon stats are worth nothing to a Hero's Blade (attunement-scaling, wtype null) or to no
+    // weapon at all: cap them at what the taken talents need and free the rest.
+    const weaponScales = gear.weapon && game.weapons[gear.weapon]?.wtype;
+    let targetCaps = null;
+    if (!req.weapon_type && !weaponScales) {
+      targetCaps = {};
+      for (const w of WEAPON_STATS) {
+        const need = Math.max(0, ...talentsResult.talents.map(t => { const c = Object.entries(game.talents[resolveTalent(t, game) ?? t]?.reqs ?? {}).find(([k]) => (canon(k) ?? k) === w); return c ? Number(c[1]) : 0; }));
+        if ((plan.final[w] ?? 0) > need) targetCaps[w] = need;
+      }
+      if (!Object.keys(targetCaps).length) targetCaps = null;
+    }
+    if (tightened || targetCaps) {
+      const plan2 = planStats(req, archetype, game, { preOverride: tightened ?? plan.preShrine, targetCaps });
+      if (targetCaps) for (const [w, cap] of Object.entries(targetCaps)) if ((plan2.final[w] ?? 0) < (plan.final[w] ?? 0)) plan2.notes.push(`${w} ${plan.final[w]} -> ${plan2.final[w]}: ${gear.weapon ? gear.weapon + " scales with its attunement, not a weapon stat" : "no weapon"}`);
       const base2 = { ...baseDraft, final: plan2.final, preShrine: plan2.preShrine, shrine: !!plan2.preShrine };
       const gear2 = pickGear(req, archetype, base2, game); // weapon/outfit/equipment re-chosen against the new stats
       const draft2 = { ...base2, origin: gear2.origin, oath: gear2.oath, outfit: gear2.outfit, weapon: gear2.weapon, equipment: gear2.equipment, talents: [] };
@@ -1108,9 +1125,11 @@ export function assemble(partialRequest, archetypes, game) {
       const musts = req.must_talents.map(n => resolveTalent(n, game)).filter(Boolean);
       // ... and it must not score worse: the meta score (stat spread, core talents, core mantras)
       const scoreOf = (pl, dr, tr) => { const m = pickMantras(req, archetype, { ...dr, talents: tr.talents, mantras: [] }, game); return scoreBuild({ ...dr, final: pl.final, talents: tr.talents, mantras: m.mantras }, archetype, game).score; };
+      // a weapon-stat cap is always worth taking (those points did nothing); a pre-shrine tightening
+      // only when the build doesn't score worse for it
       if (counting(talents2) >= counting(talentsResult) && musts.every(m => talents2.talents.includes(m)) && talents2.dropped.length <= talentsResult.dropped.length
-          && scoreOf(plan2, draft2, talents2) >= scoreOf(plan, talentDraft, talentsResult)) {
-        for (const s of BASE_STATS) if ((plan.preShrine[s] ?? 0) !== (tightened[s] ?? 0)) plan2.notes.push(`${s} pre-shrine ${plan.preShrine[s]} -> ${tightened[s]}: the highest threshold your talents need`);
+          && (targetCaps || scoreOf(plan2, draft2, talents2) >= scoreOf(plan, talentDraft, talentsResult))) {
+        if (tightened) for (const s of BASE_STATS) if ((plan.preShrine[s] ?? 0) !== (tightened[s] ?? 0)) plan2.notes.push(`${s} pre-shrine ${plan.preShrine[s]} -> ${tightened[s]}: the highest threshold your talents need`);
         plan = plan2; talentsResult = talents2; Object.assign(gear, gear2);
         Object.assign(talentDraft, draft2);
         baseDraft.final = plan.final; baseDraft.preShrine = plan.preShrine; baseDraft.shrine = !!plan.preShrine;
