@@ -308,13 +308,23 @@ export function tightenPreShrine(plan, talents, req, game, archetype = { talent_
   for (const t of talents) consider(game.talents[resolveTalent(t, game) ?? t]);
   if (req.oath && req.oath !== "None") consider(game.talents[`Oath: ${req.oath}`]);
   for (const m of req.must_mantras) consider(game.mantras[m]);
+  for (const [m] of (archetype.mantra_freq ?? []).slice(0, 12)) consider(game.mantras[m]); // the mantras pickMantras will take
+  // A requirement the FINAL stats already meet needs nothing pre-shrine (the builder accepts either
+  // phase), so only shortfalls hold a stat up before the shrine.
+  for (const st of Object.keys(need)) if ((plan.final[st] ?? 0) >= need[st]) need[st] = 0;
+
   let freed = 0;
   const trimmed = []; // [stat, amount] in trim order, so unused surplus can go back where it was
-  for (const s of BASE_STATS) {
-    const v = pre[s] ?? 0;
-    if (v <= 1 || (plan.final[s] ?? 0) >= 75) continue;
-    const cap = Math.max(1, need[s] ?? 0, Math.min(v, plan.shrineBase?.[s] ?? 0) > 0 ? 1 : 0);
-    if (v > cap) { freed += v - cap; trimmed.push([s, v - cap]); pre[s] = cap; }
+  for (const st of ALL_STATS) {
+    const v = pre[st] ?? 0;
+    if (v <= 1) continue;
+    // The shrine averages every invested stat and only base/weapon stats may keep `original - 25`;
+    // an ATTUNEMENT above the average is flattened outright, so points in it beyond what the kit
+    // needs buy nothing. A base/weapon stat the build stacks (final 75+) keeps its value.
+    const canStack = !ATTUNEMENTS.includes(st) && (plan.final[st] ?? 0) >= 75;
+    if (canStack) continue;
+    const cap = Math.max(1, need[st] ?? 0);
+    if (v > cap) { freed += v - cap; trimmed.push([st, v - cap]); pre[st] = cap; }
   }
   if (!freed) return null;
   // First: buy the next talent thresholds the freed points can reach (more talents before the
@@ -341,6 +351,15 @@ export function tightenPreShrine(plan, talents, req, game, archetype = { talent_
   // below Power 8, the remainder goes back where the archetype's players had it - moving it into
   // other stats would reshape the shrine's floors in ways no real build does.
   const MIN_SHRINE_POWER = 8;
+  // Points that must stay invested to reach Power 8 go where they cost the build least: a base or
+  // weapon stat it wants high, which keeps `original - 25` through the shrine (a floor under its own
+  // target). Otherwise they return to the stat the archetype's players had them in.
+  for (const st of [...BASE_STATS, ...WEAPON_STATS].filter(x => (pre[x] ?? 0) > 0).sort((x, y) => (plan.final[y] ?? 0) - (plan.final[x] ?? 0))) {
+    if (freed <= 0 || powerFor(pre) >= MIN_SHRINE_POWER) break;
+    const room = Math.max(0, pointsForPower(MIN_SHRINE_POWER) - pointsSpent(pre));
+    const give = Math.min(freed, room, 100 - (pre[st] ?? 0));
+    if (give > 0) { pre[st] += give; freed -= give; }
+  }
   for (const [s, amount] of trimmed) {
     if (freed <= 0 || powerFor(pre) >= MIN_SHRINE_POWER) break;
     const give = Math.min(amount, freed, Math.max(0, pointsForPower(MIN_SHRINE_POWER) - pointsSpent(pre)));
@@ -1087,7 +1106,7 @@ export function assemble(partialRequest, archetypes, game) {
   let plan = planStats(req, archetype, game);
   if (oathNote) plan.notes.push(oathNote);
 
-  const shrine = !!plan.preShrine;
+  const shrine = !!plan.preShrine; // initial value; the core below re-reads it after the coherence pass
   const baseDraft = { final: plan.final, preShrine: plan.preShrine, shrine, race: plan.race, multifaceted: plan.multifaceted };
 
   const gear = pickGear(req, archetype, baseDraft, game);
@@ -1125,9 +1144,13 @@ export function assemble(partialRequest, archetypes, game) {
       const musts = req.must_talents.map(n => resolveTalent(n, game)).filter(Boolean);
       // ... and it must not score worse: the meta score (stat spread, core talents, core mantras)
       const scoreOf = (pl, dr, tr) => { const m = pickMantras(req, archetype, { ...dr, talents: tr.talents, mantras: [] }, game); return scoreBuild({ ...dr, final: pl.final, talents: tr.talents, mantras: m.mantras }, archetype, game).score; };
+      // and it must not make the build invalid: a stat the replan lowered can leave a talent
+      // (typically one pulled in by a must-have's prerequisite chain) short of its requirement.
+      const hardErrors = (dr, tr) => validate({ ...dr, talents: tr.talents, mantras: [] }, game).errors.filter(e => e.code !== "points").length;
       // a weapon-stat cap is always worth taking (those points did nothing); a pre-shrine tightening
       // only when the build doesn't score worse for it
       if (counting(talents2) >= counting(talentsResult) && musts.every(m => talents2.talents.includes(m)) && talents2.dropped.length <= talentsResult.dropped.length
+          && hardErrors(draft2, talents2) <= hardErrors(talentDraft, talentsResult)
           && (targetCaps || scoreOf(plan2, draft2, talents2) >= scoreOf(plan, talentDraft, talentsResult))) {
         if (tightened) for (const s of BASE_STATS) if ((plan.preShrine[s] ?? 0) !== (tightened[s] ?? 0)) plan2.notes.push(`${s} pre-shrine ${plan.preShrine[s]} -> ${tightened[s]}: the highest threshold your talents need`);
         plan = plan2; talentsResult = talents2; Object.assign(gear, gear2);
@@ -1153,7 +1176,8 @@ export function assemble(partialRequest, archetypes, game) {
     origin: gear.origin, oath: gear.oath, race: plan.race, murmur: gear.murmur, bell: gear.bell,
     outfit: gear.outfit, weapon: gear.weapon, enchant: gear.enchant, weaponStars: gear.weaponStars,
     boons: gear.boons, flaws: gear.flaws, traits: gear.traits,
-    multifaceted: plan.multifaceted, shrine, preShrine: plan.preShrine, final: plan.final,
+    // re-read from `plan`: the coherence pass above can replace it (and with it whether the build shrines)
+    multifaceted: plan.multifaceted, shrine: !!plan.preShrine, preShrine: plan.preShrine, final: plan.final,
     talents: talentsResult.talents, mantras: mantrasResult.mantras, mantraMods: mantrasResult.mantraMods,
     equipment: gear.equipment,
   };
